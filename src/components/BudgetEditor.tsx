@@ -1,0 +1,170 @@
+import React from 'react';
+import { useFinance } from '../context/FinanceContext';
+import { ShieldCheck, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react';
+
+export const BudgetEditor: React.FC = () => {
+  const { budgets, categoryAverages, updateBudget, isDataLoaded } = useFinance();
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'EUR',
+      maximumFractionDigits: 0
+    }).format(val);
+  };
+
+  const handleSliderChange = (catName: string, value: number) => {
+    updateBudget(catName, value);
+  };
+
+  // Split into Income and Expense categories
+  const incomeCategory = budgets.find(b => b.name === 'Income');
+  const expenseCategories = budgets.filter(b => b.name !== 'Income' && b.name !== 'Uncategorized');
+
+  return (
+    <div className="space-y-6">
+      {/* Top Banner Context */}
+      <div className="glass-card p-6 rounded-2xl border border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold tracking-wider uppercase text-zinc-300">Set Monthly Budget Baseline</h3>
+          <p className="text-xs text-zinc-400">
+            Establish baseline limits for your spending. These targets form the base structure of your 24-month forecast.
+          </p>
+        </div>
+        {!isDataLoaded && (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-950/40 border border-amber-900/30 text-amber-400 rounded-full text-xs font-semibold">
+            <ShieldAlert className="w-3.5 h-3.5" />
+            No statements loaded: Using default guidelines
+          </span>
+        )}
+        {isDataLoaded && (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-950/40 border border-emerald-900/30 text-emerald-400 rounded-full text-xs font-semibold">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Comparing against statements
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Income Modeling Section */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="glass-card p-6 rounded-2xl border border-zinc-800 space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              Monthly Income Base
+            </h4>
+            
+            {incomeCategory && (
+              <div className="space-y-4 pt-2">
+                <div className="flex justify-between items-end">
+                  <span className="text-sm font-semibold text-zinc-200">{incomeCategory.name}</span>
+                  <div className="text-right">
+                    <span className="text-xs text-zinc-500 block">Baseline Target</span>
+                    <span className="text-lg font-bold font-mono text-emerald-400">
+                      {formatCurrency(incomeCategory.limit)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <input
+                    type="range"
+                    min="0"
+                    max="15000"
+                    step="100"
+                    value={incomeCategory.limit}
+                    onChange={(e) => handleSliderChange('Income', Number(e.target.value))}
+                    className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 focus:outline-none"
+                  />
+                  <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
+                    <span>€0</span>
+                    <span>€15,000</span>
+                  </div>
+                </div>
+
+                {isDataLoaded && (
+                  <div className="p-3 bg-zinc-900/60 rounded-xl border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
+                    <div className="flex justify-between">
+                      <span>Statement Avg Income:</span>
+                      <span className="font-mono text-zinc-300 font-semibold">
+                        {formatCurrency(categoryAverages['Income'] || 0)}/mo
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Expenses Modeling Section */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="glass-card p-6 rounded-2xl border border-zinc-800 space-y-6">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+              Monthly Expense Limits
+            </h4>
+
+            <div className="space-y-6">
+              {expenseCategories.map(cat => {
+                const actualAvg = categoryAverages[cat.name] || 0;
+                const isOverBudget = isDataLoaded && actualAvg > cat.limit && cat.limit > 0;
+                
+                return (
+                  <div key={cat.name} className="space-y-2 pb-4 border-b border-zinc-800/40 last:border-b-0 last:pb-0">
+                    <div className="flex justify-between items-center">
+                      <div className="space-y-0.5">
+                        <span className="text-sm font-semibold text-zinc-200">{cat.name}</span>
+                        {isDataLoaded && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-zinc-500 font-mono">
+                              Avg Spent: {formatCurrency(actualAvg)}
+                            </span>
+                            {isOverBudget && (
+                              <span className="text-[9px] px-1.5 bg-rose-950/50 border border-rose-900/30 text-rose-400 rounded-md font-semibold font-mono animate-pulse">
+                                Overspent by {formatCurrency(actualAvg - cat.limit)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-xs text-zinc-500 block">Budget Limit</span>
+                        <input
+                          type="number"
+                          value={cat.limit}
+                          onChange={(e) => handleSliderChange(cat.name, Number(e.target.value))}
+                          className="w-20 bg-zinc-900 border border-zinc-800 rounded-lg py-1 px-2 text-right text-xs font-bold font-mono text-zinc-100 focus:outline-none focus:border-accent-gold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <input
+                        type="range"
+                        min="0"
+                        max="4000"
+                        step="50"
+                        value={cat.limit}
+                        onChange={(e) => handleSliderChange(cat.name, Number(e.target.value))}
+                        className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none ${
+                          isOverBudget 
+                            ? 'bg-rose-950 accent-rose-400' 
+                            : 'bg-zinc-800 accent-accent-gold'
+                        }`}
+                      />
+                      <div className="flex justify-between text-[9px] text-zinc-500 font-mono">
+                        <span>€0</span>
+                        <span>€4,000</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -1,26 +1,96 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #09090b;
+  --foreground: #f4f4f5;
+  --card-bg: #18181b;
+  --card-border: #27272a;
+  
+  /* Brand accents */
+  --accent-gold: #fbbf24;
+  --accent-gold-hover: #f59e0b;
+  --accent-sage: #34d399;
+  --accent-rose: #fb7185;
+  --accent-violet: #a78bfa;
 }
 
-@theme inline {
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-card: var(--card-bg);
+  --color-border: var(--card-border);
+  
+  --color-accent-gold: var(--accent-gold);
+  --color-accent-gold-hover: var(--accent-gold-hover);
+  --color-accent-sage: var(--accent-sage);
+  --color-accent-rose: var(--accent-rose);
+  --color-accent-violet: var(--accent-violet);
+  
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
+
+/* Custom scrollbars for a premium feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(9, 9, 11, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(82, 82, 91, 0.4);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(113, 113, 122, 0.6);
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(24, 24, 27, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(63, 63, 70, 0.3);
+}
+
+.glass-card {
+  background: rgba(39, 39, 42, 0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(63, 63, 70, 0.2);
+}
+
+/* Ledger paper pattern background for the P&L ledger */
+.ledger-grid {
+  background-image: 
+    linear-gradient(to right, rgba(63, 63, 70, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(63, 63, 70, 0.1) 1px, transparent 1px);
+  background-size: 80px 40px;
+}
+
+/* Pulse glow for AI Advisor avatar */
+@keyframes pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(251, 191, 36, 0.2), inset 0 0 10px rgba(251, 191, 36, 0.1);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(251, 191, 36, 0.4), inset 0 0 15px rgba(251, 191, 36, 0.2);
+  }
+}
+
+.ai-glow-orb {
+  animation: pulse-glow 3s infinite ease-in-out;
+}
+
