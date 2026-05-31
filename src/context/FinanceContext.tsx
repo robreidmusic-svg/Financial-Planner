@@ -61,6 +61,7 @@ const DEFAULT_CATEGORIES = [
   'Mobile & Broadband',
   'Credit Card Payment',
   'Investments',
+  'Transfers to Savings',
   'Transfers to Sarah',
   'Transfers to Leanne',
   'Transfers to Georgia',
@@ -71,37 +72,130 @@ const DEFAULT_CATEGORIES = [
 ];
 
 const DEFAULT_RULES: CategorizationRule[] = [
-  { id: '1', keyword: 'netflix', category: 'Subscriptions' },
-  { id: '2', keyword: 'spotify', category: 'Subscriptions' },
-  { id: '3', keyword: 'uber', category: 'Transport & Travel' },
-  { id: '4', keyword: 'lyft', category: 'Transport & Travel' },
-  { id: '5', keyword: 'walmart', category: 'Shopping' },
-  { id: '6', keyword: 'amazon', category: 'Shopping' },
-  { id: '7', keyword: 'kroger', category: 'Groceries' },
-  { id: '8', keyword: 'safeway', category: 'Groceries' },
-  { id: '9', keyword: 'wholefds', category: 'Groceries' },
-  { id: '10', keyword: 'electric', category: 'Utilities & Bills' },
-  { id: '11', keyword: 'water', category: 'Utilities & Bills' },
+  // ── Income ────────────────────────────────────────────────────────────────
   { id: '12', keyword: 'salary', category: 'Income' },
   { id: '13', keyword: 'payroll', category: 'Income' },
   { id: '14', keyword: 'deposit', category: 'Income' },
+
+  // ── Irish Grocery Stores ──────────────────────────────────────────────────
+  { id: '7', keyword: 'tesco', category: 'Groceries' },
+  { id: '32', keyword: 'lidl', category: 'Groceries' },
+  { id: '33', keyword: 'aldi', category: 'Groceries' },
+  { id: '34', keyword: 'dunnes', category: 'Groceries' },
+  { id: '35', keyword: 'supervalu', category: 'Groceries' },
+  { id: '36', keyword: 'spar', category: 'Groceries' },
+  { id: '37', keyword: 'centra', category: 'Groceries' },
+  { id: '38', keyword: 'fresh the good food market', category: 'Groceries' },
+  { id: '8', keyword: 'safeway', category: 'Groceries' },
+  { id: '9', keyword: 'wholefds', category: 'Groceries' },
+  { id: '7b', keyword: 'kroger', category: 'Groceries' },
+
+  // ── Dining & Takeout ──────────────────────────────────────────────────────
+  { id: '39', keyword: 'deliveroo', category: 'Dining & Takeout' },
+  { id: '40', keyword: 'just eat', category: 'Dining & Takeout' },
+  { id: '41', keyword: 'uber eats', category: 'Dining & Takeout' },
+  { id: '42', keyword: 'dominos', category: 'Dining & Takeout' },
+  { id: '43', keyword: 'mcdonalds', category: 'Dining & Takeout' },
+  { id: '44', keyword: 'kfc', category: 'Dining & Takeout' },
+  { id: '45', keyword: 'burger king', category: 'Dining & Takeout' },
+  { id: '46', keyword: 'nandos', category: 'Dining & Takeout' },
+  { id: '47', keyword: 'subway', category: 'Dining & Takeout' },
+  { id: '48', keyword: 'costa coffee', category: 'Dining & Takeout' },
   { id: '15', keyword: 'starbucks', category: 'Dining & Takeout' },
-  { id: '16', keyword: 'mcdonalds', category: 'Dining & Takeout' },
+  { id: '49', keyword: 'leon', category: 'Dining & Takeout' },
+  { id: '50', keyword: 'pret', category: 'Dining & Takeout' },
+  { id: '51', keyword: 'five guys', category: 'Dining & Takeout' },
+  { id: '52', keyword: 'pizza hut', category: 'Dining & Takeout' },
+  { id: '53', keyword: 'papa johns', category: 'Dining & Takeout' },
+
+  // ── Subscriptions ─────────────────────────────────────────────────────────
+  { id: '1', keyword: 'netflix', category: 'Subscriptions' },
+  { id: '2', keyword: 'spotify', category: 'Subscriptions' },
+  { id: '54', keyword: 'apple', category: 'Subscriptions' },
+  { id: '55', keyword: 'google', category: 'Subscriptions' },
+  { id: '56', keyword: 'microsoft', category: 'Subscriptions' },
+  { id: '57', keyword: 'disney', category: 'Subscriptions' },
+  { id: '58', keyword: 'amazon prime', category: 'Subscriptions' },
+  { id: '59', keyword: 'youtube premium', category: 'Subscriptions' },
+  { id: '60', keyword: 'adobe', category: 'Subscriptions' },
+  { id: '61', keyword: 'chatgpt', category: 'Subscriptions' },
+  { id: '62', keyword: 'openai', category: 'Subscriptions' },
+  { id: '63', keyword: 'linkedin', category: 'Subscriptions' },
+  { id: '64', keyword: 'dropbox', category: 'Subscriptions' },
+  { id: '65', keyword: 'slack', category: 'Subscriptions' },
+
+  // ── Transport & Travel ────────────────────────────────────────────────────
+  { id: '3', keyword: 'uber', category: 'Transport & Travel' },
+  { id: '4', keyword: 'lyft', category: 'Transport & Travel' },
+  { id: '66', keyword: 'dublin bus', category: 'Transport & Travel' },
+  { id: '67', keyword: 'irish rail', category: 'Transport & Travel' },
+  { id: '68', keyword: 'transdev', category: 'Transport & Travel' },
+  { id: '69', keyword: 'luas', category: 'Transport & Travel' },
+  { id: '70', keyword: 'taxsaver', category: 'Transport & Travel' },
+  { id: '71', keyword: 'leap card', category: 'Transport & Travel' },
+  { id: '72', keyword: 'ryanair', category: 'Transport & Travel' },
+  { id: '73', keyword: 'aer lingus', category: 'Transport & Travel' },
+  { id: '74', keyword: 'free now', category: 'Transport & Travel' },
+  { id: '75', keyword: 'bolt', category: 'Transport & Travel' },
+
+  // ── Shopping ──────────────────────────────────────────────────────────────
+  { id: '5', keyword: 'amazon', category: 'Shopping' },
+  { id: '6', keyword: 'walmart', category: 'Shopping' },
+  { id: '76', keyword: 'penneys', category: 'Shopping' },
+  { id: '77', keyword: 'primark', category: 'Shopping' },
+  { id: '78', keyword: 'zara', category: 'Shopping' },
+  { id: '79', keyword: 'marks spencer', category: 'Shopping' },
+  { id: '80', keyword: 'tk maxx', category: 'Shopping' },
+  { id: '81', keyword: 'asos', category: 'Shopping' },
+  { id: '82', keyword: 'boots', category: 'Shopping' },
+  { id: '83', keyword: 'lloyds pharmacy', category: 'Shopping' },
+  { id: '84', keyword: 'pharmacy', category: 'Shopping' },
+  { id: '85', keyword: 'hickeys', category: 'Shopping' },
+  { id: '86', keyword: 'argos', category: 'Shopping' },
+  { id: '87', keyword: 'currys', category: 'Shopping' },
+  { id: '88', keyword: 'harvey norman', category: 'Shopping' },
+  { id: '89', keyword: 'ikea', category: 'Shopping' },
+  { id: '90', keyword: 'homebase', category: 'Shopping' },
+  { id: '91', keyword: 'b&q', category: 'Shopping' },
+
+  // ── Entertainment & Leisure ───────────────────────────────────────────────
+  { id: '92', keyword: 'odeon', category: 'Entertainment & Leisure' },
+  { id: '93', keyword: 'cineworld', category: 'Entertainment & Leisure' },
+  { id: '94', keyword: 'vue cinema', category: 'Entertainment & Leisure' },
+  { id: '95', keyword: 'ticketmaster', category: 'Entertainment & Leisure' },
+  { id: '96', keyword: 'eventbrite', category: 'Entertainment & Leisure' },
+
+  // ── Utilities & Bills ─────────────────────────────────────────────────────
+  { id: '10', keyword: 'electric', category: 'Utilities & Bills' },
+  { id: '11', keyword: 'water', category: 'Utilities & Bills' },
+  { id: '97', keyword: 'gas networks', category: 'Utilities & Bills' },
+  { id: '98', keyword: 'bord gais', category: 'Utilities & Bills' },
+  { id: '99', keyword: 'eir', category: 'Utilities & Bills' },
+  { id: '100', keyword: 'sky ireland', category: 'Utilities & Bills' },
+  { id: '101', keyword: 'virgin media', category: 'Utilities & Bills' },
+
+  // ── Person-to-Person Transfers (specific — before the generic catch-all) ──
   { id: '17', keyword: 'sarah', category: 'Transfers to Sarah' },
   { id: '18', keyword: 'leanne', category: 'Transfers to Leanne' },
   { id: '19', keyword: 'georgia', category: 'Transfers to Georgia' },
   { id: '20', keyword: 'katie', category: 'Transfers to Katie' },
+
+  // ── Housing ───────────────────────────────────────────────────────────────
   { id: '21', keyword: 'rent', category: 'Housing & Rent' },
-  // Specific merchant/payee rules — must come BEFORE the generic 'transfer' catch-all
+  { id: '27', keyword: 'Mary Reid', category: 'Housing & Rent' },
+  { id: '31', keyword: 'Eddie Reid', category: 'Housing & Rent' },
+
+  // ── Specific Irish Payees ─────────────────────────────────────────────────
   { id: '24', keyword: 'Credit Union Dd', category: 'Loan Repayment' },
   { id: '25', keyword: '123 Money Limited', category: 'Insurance' },
   { id: '26', keyword: 'Westwood Leopardstown', category: 'Gym Membership' },
-  { id: '27', keyword: 'Mary Reid', category: 'Housing & Rent' },
-  { id: '31', keyword: 'Eddie Reid', category: 'Housing & Rent' },
   { id: '28', keyword: 'Vodafone Ireland Ltd', category: 'Mobile & Broadband' },
   { id: '29', keyword: 'Aib Card Pymt', category: 'Credit Card Payment' },
   { id: '30', keyword: 'To Robo Portfolio', category: 'Investments' },
-  { id: '23', keyword: 'To EUR Flexible Cash Funds', category: 'Spare Change Transfers' },
+  { id: '23', keyword: 'To EUR Flexible Cash Funds', category: 'Transfers to Savings' },
+  { id: '102', keyword: 'From EUR Flexible Cash Funds', category: 'Spare Change Transfers' },
+
+  // ── Generic catch-all — MUST be last ──────────────────────────────────────
   { id: '22', keyword: 'transfer', category: 'Miscellaneous transfers' }
 ];
 
@@ -351,6 +445,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         const originalCat = catIdx !== -1 ? cols[catIdx].replace(/['"]/g, '') : undefined;
+        // Use bank's original category as fallback if no keyword rule matches.
+        // This preserves AIB's own categorisation for transactions we don't have a rule for,
+        // while keyword rules take priority and override it when they match.
         const finalCategory = autoCategorize(desc, originalCat || 'Uncategorized');
 
         parsedTransactions.push({
