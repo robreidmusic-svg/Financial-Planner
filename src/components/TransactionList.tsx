@@ -10,7 +10,8 @@ export const TransactionList: React.FC = () => {
     addRule, 
     deleteRule, 
     budgets,
-    isDataLoaded 
+    isDataLoaded,
+    addCategory
   } = useFinance();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,6 +20,11 @@ export const TransactionList: React.FC = () => {
   // Rule creator states
   const [newRuleKeyword, setNewRuleKeyword] = useState('');
   const [newRuleCategory, setNewRuleCategory] = useState('Groceries');
+  
+  // Custom Category creation states
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState('');
   
   // Sort states
   const [sortField, setSortField] = useState<'date' | 'amount'>('date');
@@ -221,16 +227,71 @@ export const TransactionList: React.FC = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-zinc-500">Assign To Category</label>
-              <select
-                value={newRuleCategory}
-                onChange={(e) => setNewRuleCategory(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer"
-              >
-                {budgets.map(b => (
-                  <option key={b.name} value={b.name}>{b.name}</option>
-                ))}
-              </select>
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] uppercase font-bold text-zinc-500">Assign To Category</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreatingCategory(!isCreatingCategory);
+                    setNewCategoryName('');
+                    setCategoryError('');
+                  }}
+                  className="text-[10px] text-accent-gold hover:underline font-semibold flex items-center gap-0.5"
+                >
+                  {isCreatingCategory ? 'Cancel' : '+ New Category'}
+                </button>
+              </div>
+
+              {isCreatingCategory ? (
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="Category name (e.g. Pet Expenses)"
+                      value={newCategoryName}
+                      onChange={(e) => {
+                        setNewCategoryName(e.target.value);
+                        setCategoryError('');
+                      }}
+                      className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl py-1.5 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const name = newCategoryName.trim();
+                        if (!name) {
+                          setCategoryError('Category name cannot be empty');
+                          return;
+                        }
+                        if (budgets.some(b => b.name.toLowerCase() === name.toLowerCase())) {
+                          setCategoryError('Category already exists');
+                          return;
+                        }
+                        addCategory(name);
+                        setNewRuleCategory(name); // Auto-select the newly created category
+                        setIsCreatingCategory(false);
+                        setNewCategoryName('');
+                      }}
+                      className="px-3 bg-zinc-800 hover:bg-zinc-750 border border-zinc-700/50 text-zinc-200 rounded-xl text-xs font-semibold"
+                    >
+                      Create
+                    </button>
+                  </div>
+                  {categoryError && (
+                    <p className="text-[10px] text-rose-400 font-mono">{categoryError}</p>
+                  )}
+                </div>
+              ) : (
+                <select
+                  value={newRuleCategory}
+                  onChange={(e) => setNewRuleCategory(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer"
+                >
+                  {budgets.map(b => (
+                    <option key={b.name} value={b.name}>{b.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <button

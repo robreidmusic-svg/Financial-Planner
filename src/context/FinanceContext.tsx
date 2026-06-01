@@ -27,6 +27,7 @@ interface FinanceContextType {
   addRule: (keyword: string, category: string) => void;
   deleteRule: (id: string) => void;
   updateBudget: (categoryName: string, limit: number) => void;
+  addCategory: (categoryName: string) => void;
   addFutureEvent: (event: Omit<FutureEvent, 'id' | 'isActive'>) => void;
   deleteFutureEvent: (id: string) => void;
   toggleFutureEvent: (id: string) => void;
@@ -530,6 +531,18 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Update budget limit
   const updateBudget = (categoryName: string, limit: number) => {
     setBudgets(prev => prev.map(b => b.name === categoryName ? { ...b, limit } : b));
+  };
+
+  // Add a new custom category
+  const addCategory = (categoryName: string) => {
+    const trimmed = categoryName.trim();
+    if (!trimmed) return;
+    setBudgets(prev => {
+      if (prev.some(b => b.name.toLowerCase() === trimmed.toLowerCase())) {
+        return prev;
+      }
+      return [...prev, { name: trimmed, limit: 300 }];
+    });
   };
 
   // Future Adjusters
@@ -1050,6 +1063,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       addRule,
       deleteRule,
       updateBudget,
+      addCategory,
       addFutureEvent,
       deleteFutureEvent,
       toggleFutureEvent,
