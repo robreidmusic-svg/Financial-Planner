@@ -4,10 +4,19 @@ import { KPIGrid } from './KPIGrid';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Info } from 'lucide-react';
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatMonthKey(key: string): string {
+  // key is "YYYY-MM"
+  const [year, month] = key.split('-');
+  return `${MONTH_NAMES[parseInt(month, 10) - 1]} ${year}`;
+}
+
 export const BudgetDashboard: React.FC = () => {
-  const { categoryAverages, budgets, isDataLoaded } = useFinance();
+  const { categoryAverages, budgets, transactions, isDataLoaded } = useFinance();
   const [isMounted, setIsMounted] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>('average');
 
   useEffect(() => {
     setIsMounted(true);
@@ -21,17 +30,47 @@ export const BudgetDashboard: React.FC = () => {
     }).format(val);
   };
 
-  // Spending breakdown — exclude Income & Uncategorized
+  // Sorted list of unique months present in transactions (newest first)
+  const availableMonths = useMemo(() => {
+    const keys = new Set<string>();
+    transactions.forEach(tx => {
+      if (tx.date && tx.date.length >= 7) keys.add(tx.date.substring(0, 7));
+    });
+    return Array.from(keys).sort((a, b) => b.localeCompare(a));
+  }, [transactions]);
+
+  // Per-month spending totals by category (excludes Income & Spare Change)
+  const monthlyTotals = useMemo(() => {
+    const result: Record<string, Record<string, number>> = {};
+    transactions.forEach(tx => {
+      if (tx.amount >= 0 && tx.category !== 'Income') return;
+      if (tx.category === 'Income' && tx.amount < 0) return;
+      if (tx.category === 'Spare Change Transfers') return;
+      const monthKey = tx.date.substring(0, 7);
+      if (!result[monthKey]) result[monthKey] = {};
+      if (!result[monthKey][tx.category]) result[monthKey][tx.category] = 0;
+      result[monthKey][tx.category] += Math.abs(tx.amount);
+    });
+    return result;
+  }, [transactions]);
+
+  // Pie data — average or specific month
   const pieData = useMemo(() => {
-    return Object.entries(categoryAverages)
+    let source: Record<string, number>;
+    if (selectedMonth === 'average') {
+      source = categoryAverages;
+    } else {
+      source = monthlyTotals[selectedMonth] || {};
+    }
+    return Object.entries(source)
       .filter(([name, value]) => name !== 'Income' && name !== 'Uncategorized' && value > 0)
       .map(([name, value]) => ({ name, value: Math.round(value) }))
       .sort((a, b) => b.value - a.value);
-  }, [categoryAverages]);
+  }, [selectedMonth, categoryAverages, monthlyTotals]);
 
   const totalSpend = useMemo(() => pieData.reduce((sum, d) => sum + d.value, 0), [pieData]);
 
-  // Budget vs Actual bar chart data
+  // Budget vs Actual bar chart — always uses averages
   const comparisonData = useMemo(() => {
     return budgets
       .filter(b => b.name !== 'Income' && b.name !== 'Uncategorized')
@@ -50,6 +89,12 @@ export const BudgetDashboard: React.FC = () => {
     '#34d399', '#c084fc', '#fb7185', '#22d3ee',
     '#facc15', '#4ade80',
   ];
+
+  const isAverage = selectedMonth === 'average';
+  const centreLabel = isAverage ? 'Monthly Avg' : formatMonthKey(selectedMonth);
+  const amountColumnLabel = isAverage ? 'Avg / Month' : 'Total';
+  const footerLabel = isAverage ? 'avg across all categories' : formatMonthKey(selectedMonth);
+  const footerTitle = isAverage ? 'Total Monthly Outgoings' : 'Total Outgoings';
 
   if (!isMounted) {
     return (
@@ -71,9 +116,50 @@ export const BudgetDashboard: React.FC = () => {
 
           {/* ── Spending Distribution — full-width panel ── */}
           <div className="glass-card p-6 rounded-2xl border border-zinc-800">
-            <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-6">
-              Spending Distribution (Monthly Actuals)
-            </h3>
+
+            {/* Panel header + month toggle */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 shrink-0">
+                Spending Distribution
+              </h3>
+
+              {/* Scrollable pill toggle */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide min-w-0">
+                {/* Average pill */}
+                <button
+                  id="month-toggle-average"
+                  onClick={() => { setSelectedMonth('average'); setActiveIndex(null); }}
+                  className="shrink-0 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all duration-150"
+                  style={{
+                    backgroundColor: isAverage ? '#f59e0b' : 'transparent',
+                    color: isAverage ? '#18181b' : '#71717a',
+                    border: isAverage ? '1px solid #f59e0b' : '1px solid #3f3f46',
+                  }}
+                >
+                  Avg
+                </button>
+
+                {/* One pill per available month */}
+                {availableMonths.map(key => {
+                  const active = selectedMonth === key;
+                  return (
+                    <button
+                      key={key}
+                      id={`month-toggle-${key}`}
+                      onClick={() => { setSelectedMonth(key); setActiveIndex(null); }}
+                      className="shrink-0 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wide transition-all duration-150 whitespace-nowrap"
+                      style={{
+                        backgroundColor: active ? '#27272a' : 'transparent',
+                        color: active ? '#f4f4f5' : '#71717a',
+                        border: active ? '1px solid #52525b' : '1px solid #27272a',
+                      }}
+                    >
+                      {formatMonthKey(key)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <div className="flex flex-col lg:flex-row gap-8 items-start">
 
@@ -113,7 +199,7 @@ export const BudgetDashboard: React.FC = () => {
                         padding: '10px 14px'
                       }}
                       itemStyle={{ color: '#f4f4f5', fontSize: '13px' }}
-                      formatter={(val: any) => [formatCurrency(Number(val || 0)), 'Avg / month']}
+                      formatter={(val: any) => [formatCurrency(Number(val || 0)), amountColumnLabel]}
                       labelStyle={{ color: '#a1a1aa', fontSize: '11px', marginBottom: 4 }}
                     />
                   </PieChart>
@@ -121,7 +207,9 @@ export const BudgetDashboard: React.FC = () => {
 
                 {/* Centre label */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Monthly</span>
+                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold leading-tight text-center px-2">
+                    {centreLabel}
+                  </span>
                   <span className="text-2xl font-bold font-mono text-zinc-100 mt-0.5">
                     {formatCurrency(totalSpend)}
                   </span>
@@ -137,7 +225,7 @@ export const BudgetDashboard: React.FC = () => {
                   <span>Category</span>
                   <div className="flex items-center gap-3">
                     <span className="hidden sm:block w-20 text-right">Distribution</span>
-                    <span className="w-20 text-right">Avg / Month</span>
+                    <span className="w-20 text-right">{amountColumnLabel}</span>
                   </div>
                 </div>
 
@@ -212,9 +300,9 @@ export const BudgetDashboard: React.FC = () => {
                 <div className="mt-4 pt-3 border-t border-zinc-700 flex items-center justify-between pr-1">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                      Total Monthly Outgoings
+                      {footerTitle}
                     </span>
-                    <span className="text-[10px] text-zinc-600 mt-0.5">avg across all categories</span>
+                    <span className="text-[10px] text-zinc-600 mt-0.5">{footerLabel}</span>
                   </div>
                   <span className="font-mono font-bold text-xl text-amber-400">
                     {formatCurrency(totalSpend)}
