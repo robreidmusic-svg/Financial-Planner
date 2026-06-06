@@ -842,10 +842,23 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // and project income using the set income limit (or historical income average if limit is 0).
     const baseBudgetIncome = budgets.find(b => b.name === 'Income')?.limit || categoryAverages['Income'] || 0;
 
-    // Base monthly expense budget sum (excluding income category)
+    // Categories excluded from the expense projection:
+    //  - Income              : revenue side, not a cost
+    //  - Spare Change Transfers / Pocket Transfers : internal pass-throughs that cancel out
+    //  - Credit Card Payment : double-counts spending already captured in other categories
+    //  - Transfers to Savings: money you still own — not a cost
+    const PROJECTION_EXPENSE_EXCLUSIONS = new Set([
+      'Income',
+      'Spare Change Transfers',
+      'Pocket Transfers',
+      'Credit Card Payment',
+      'Transfers to Savings',
+    ]);
+
+    // Base monthly expense budget sum
     const baseBudgetExpensesMap: Record<string, number> = {};
     budgets.forEach(b => {
-      if (b.name !== 'Income' && b.name !== 'Spare Change Transfers') {
+      if (!PROJECTION_EXPENSE_EXCLUSIONS.has(b.name)) {
         baseBudgetExpensesMap[b.name] = b.limit || categoryAverages[b.name] || 0;
       }
     });
