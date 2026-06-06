@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, Cell } from 'recharts';
-import { Plus, Trash2, Calendar, AlertCircle, TrendingUp, TrendingDown, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Trash2, Calendar, AlertCircle, TrendingUp, TrendingDown, ToggleLeft, ToggleRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { FutureEvent } from '../types';
 
 export const Forecaster: React.FC = () => {
@@ -11,11 +11,13 @@ export const Forecaster: React.FC = () => {
     addFutureEvent, 
     deleteFutureEvent, 
     toggleFutureEvent,
-    budgets
+    budgets,
+    categoryAverages,
   } = useFinance();
 
   const [isMounted, setIsMounted] = useState(false);
   const [chartType, setChartType] = useState<'cash' | 'flows'>('cash');
+  const [showBasis, setShowBasis] = useState(false);
   
   // Future Event Form State
   const [label, setLabel] = useState('');
@@ -345,6 +347,83 @@ export const Forecaster: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Projection Basis breakdown ── */}
+      <div className="glass-card rounded-2xl border border-zinc-800 overflow-hidden">
+        <button
+          id="projection-basis-toggle"
+          onClick={() => setShowBasis(v => !v)}
+          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-zinc-900/40 transition-colors"
+        >
+          <div>
+            <span className="text-xs font-semibold tracking-wider uppercase text-zinc-400">Projection Basis</span>
+            <p className="text-[10px] text-zinc-600 mt-0.5">Exact income &amp; expense values the engine uses each month</p>
+          </div>
+          {showBasis ? <ChevronUp className="w-4 h-4 text-zinc-500" /> : <ChevronDown className="w-4 h-4 text-zinc-500" />}
+        </button>
+
+        {showBasis && monthlyProjections[0] && (() => {
+          const m0 = monthlyProjections[0];
+          const breakdown = Object.entries(m0.categoryBreakdown)
+            .map(([name, value]) => ({ name, value: Math.round(value as number) }))
+            .filter(e => e.value > 0)
+            .sort((a, b) => b.value - a.value);
+          const totalExpenses = breakdown.reduce((s, e) => s + e.value, 0);
+
+          return (
+            <div className="px-6 pb-6 space-y-3">
+              {/* Income row */}
+              <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-emerald-950/20 border border-emerald-900/30">
+                <span className="text-xs font-semibold text-emerald-400">Monthly Income (projected)</span>
+                <span className="font-mono font-bold text-emerald-400 text-sm">+{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(m0.income)}</span>
+              </div>
+
+              {/* Column headers */}
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-zinc-600 px-3 pt-1">
+                <span>Expense Category</span>
+                <span>Monthly (projected)</span>
+              </div>
+
+              {/* Expense rows */}
+              <div className="space-y-1 max-h-[400px] overflow-y-auto pr-1">
+                {breakdown.map(item => {
+                  const pct = totalExpenses > 0 ? (item.value / totalExpenses) * 100 : 0;
+                  const isLarge = pct > 20;
+                  return (
+                    <div key={item.name} className="flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-zinc-900/40 transition-colors">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div
+                          className="h-1 rounded-full shrink-0"
+                          style={{ width: `${Math.max(pct, 2)}%`, maxWidth: '80px', backgroundColor: isLarge ? '#f43f5e' : '#52525b' }}
+                        />
+                        <span className={`text-xs truncate ${isLarge ? 'text-rose-300 font-semibold' : 'text-zinc-400'}`}>{item.name}</span>
+                        {isLarge && <span className="text-[9px] font-bold text-rose-500 bg-rose-950/40 px-1.5 py-0.5 rounded-full shrink-0">HIGH</span>}
+                      </div>
+                      <span className={`font-mono text-xs font-semibold ml-4 shrink-0 ${isLarge ? 'text-rose-400' : 'text-zinc-300'}`}>
+                        -{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(item.value)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Total footer */}
+              <div className="flex items-center justify-between pt-3 border-t border-zinc-800 px-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Total Monthly Expenses</span>
+                <span className="font-mono font-bold text-rose-400">
+                  -{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(totalExpenses)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between px-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Net</span>
+                <span className={`font-mono font-bold text-sm ${m0.netSavings >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {m0.netSavings >= 0 ? '+' : ''}{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(m0.netSavings)}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
