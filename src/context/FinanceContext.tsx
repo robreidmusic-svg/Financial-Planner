@@ -69,6 +69,7 @@ const DEFAULT_CATEGORIES = [
   'Transfers to Katie',
   'Miscellaneous transfers',
   'Spare Change Transfers',
+  'Pocket Transfers',
   'Uncategorized'
 ];
 
@@ -180,6 +181,8 @@ const DEFAULT_RULES: CategorizationRule[] = [
   { id: '18', keyword: 'leanne', category: 'Transfers to Leanne' },
   { id: '19', keyword: 'georgia', category: 'Transfers to Georgia' },
   { id: '20', keyword: 'katie', category: 'Transfers to Katie' },
+  { id: '104', keyword: 'to pocket', category: 'Pocket Transfers' },
+  { id: '105', keyword: 'from pocket', category: 'Pocket Transfers' },
 
   // ── Housing ───────────────────────────────────────────────────────────────
   { id: '21', keyword: 'rent', category: 'Housing & Rent' },
@@ -798,6 +801,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (tx.amount >= 0 && tx.category !== 'Income') return; // Ignore deposit items in spending categories
       if (tx.category === 'Income' && tx.amount < 0) return; // Ignore negative items in Income
       if (tx.category === 'Spare Change Transfers') return; // Ignore automated savings transfers
+      if (tx.category === 'Pocket Transfers') return; // Ignore pocket transfers — they cancel out
 
       const monthKey = tx.date.substring(0, 7); // "YYYY-MM"
       monthsSet.add(monthKey);
