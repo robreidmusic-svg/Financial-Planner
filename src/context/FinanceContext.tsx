@@ -835,35 +835,59 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const baseDate = new Date();
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-    // Find the base base-budget projection figures
-    // If no transactions have been uploaded, we rely solely on configured budget limits
-    // If transactions have been uploaded, we can base expenses on either category budget limits or historical averages.
-    // For projection safety, we will project expenses using the set budget limits, since that is the "plan", 
-    // and project income using the set income limit (or historical income average if limit is 0).
-    const baseBudgetIncome = budgets.find(b => b.name === 'Income')?.limit || categoryAverages['Income'] || 0;
-
-    // Categories excluded from the expense projection:
-    //  - Income              : revenue side, not a cost
-    //  - Spare Change Transfers / Pocket Transfers : internal pass-throughs that cancel out
-    //  - Credit Card Payment : double-counts spending already captured in other categories
-    //  - Transfers to Savings: money you still own — not a cost
-    const PROJECTION_EXPENSE_EXCLUSIONS = new Set([
-      'Income',
-      'Spare Change Transfers',
+    // ── Compute base income & expenses from RAW TRANSACTION AMOUNTS ──────────
+    // Instead of relying on category averages (which can be miscategorised or
+    // inflated by pass-through transfers), we sum every credit and debit directly.
+    //
+    // Categories excluded from this calculation:
+    //   Pocket Transfers       – cancel out by design
+    //   Spare Change Transfers – internal noise
+    //   Credit Card Payment    – double-counts spending already in other categories
+    //   Transfers to Savings   – money you still own; not a real outgoing
+    const RAW_FLOW_EXCLUSIONS = new Set([
       'Pocket Transfers',
+      'Spare Change Transfers',
       'Credit Card Payment',
       'Transfers to Savings',
     ]);
 
-    // Base monthly expense projection — uses actual historical average as the primary source
-    // so the KPIs reflect what you genuinely spend, not just what you've budgeted.
-    // Falls back to the budget limit only for categories that have no historical data yet
-    // (e.g. a planned new recurring expense you haven't started yet).
-    const baseBudgetExpensesMap: Record<string, number> = {};
-    budgets.forEach(b => {
-      if (!PROJECTION_EXPENSE_EXCLUSIONS.has(b.name)) {
-        baseBudgetExpensesMap[b.name] = categoryAverages[b.name] || b.limit || 0;
+    // Bucket every transaction into its calendar month
+    type MonthFlow = { credits: number; debits: number; catDebits: Record<string, number> };
+    const flowByMonth: Record<string, MonthFlow> = {};
+
+    transactions.forEach(tx => {
+      if (RAW_FLOW_EXCLUSIONS.has(tx.category)) return;
+      const mk = tx.date.substring(0, 7); // "YYYY-MM"
+      if (!flowByMonth[mk]) flowByMonth[mk] = { credits: 0, debits: 0, catDebits: {} };
+      if (tx.amount > 0) {
+        flowByMonth[mk].credits += tx.amount;
+      } else {
+        const cat = tx.category || 'Uncategorized';
+        flowByMonth[mk].debits += Math.abs(tx.amount);
+        flowByMonth[mk].catDebits[cat] = (flowByMonth[mk].catDebits[cat] || 0) + Math.abs(tx.amount);
       }
+    });
+
+    const flowMonths = Object.keys(flowByMonth);
+    const fmc = Math.max(flowMonths.length, 1); // months divisor
+
+    // Base monthly income = average of all credits across history
+    const baseIncome = flowMonths.length > 0
+      ? Math.round(flowMonths.reduce((s, m) => s + flowByMonth[m].credits, 0) / fmc)
+      : (budgets.find(b => b.name === 'Income')?.limit || 0);
+
+    // Base monthly expenses = average of all debits across history
+    const baseExpenses = flowMonths.length > 0
+      ? Math.round(flowMonths.reduce((s, m) => s + flowByMonth[m].debits, 0) / fmc)
+      : 0;
+
+    // Per-category debit averages (for the Projection Basis display panel)
+    const allExpCats = new Set(flowMonths.flatMap(m => Object.keys(flowByMonth[m].catDebits)));
+    const baseCategoryBreakdown: Record<string, number> = {};
+    allExpCats.forEach(cat => {
+      baseCategoryBreakdown[cat] = Math.round(
+        flowMonths.reduce((s, m) => s + (flowByMonth[m].catDebits[cat] || 0), 0) / fmc
+      );
     });
 
     // Run 24 month projections
@@ -871,47 +895,32 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const currentMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + offset, 1);
       const label = `${monthNames[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
 
-      // Start calculating flows for this offset month
-      let monthIncome = baseBudgetIncome;
-      
-      // Copy base budget expenses
-      const monthExpensesBreakdown = { ...baseBudgetExpensesMap };
-      
-      // Layer in future active events
-      let oneTimeIncomesVal = 0;
-      let oneTimeExpensesVal = 0;
-      let recurringIncomesVal = 0;
-      let recurringExpensesVal = 0;
+      // Start from the raw transaction averages
+      let monthIncome = baseIncome;
+      let monthExpenses = baseExpenses;
 
-      // Find events applying to this month
+      // Copy category breakdown for future events layer
+      const monthExpensesBreakdown = { ...baseCategoryBreakdown };
+
+      // Layer in future active events
       futureEvents.forEach(event => {
         if (!event.isActive) return;
 
-        const isEventTriggered = 
+        const isEventTriggered =
           event.type.startsWith('one-time') ? event.monthOffset === offset :
           event.type.startsWith('recurring') ? offset >= event.monthOffset : false;
 
         if (isEventTriggered) {
-          if (event.type === 'one-time-income') {
-            oneTimeIncomesVal += event.amount;
-          } else if (event.type === 'one-time-expense') {
-            oneTimeExpensesVal += event.amount;
-            monthExpensesBreakdown[event.category] = (monthExpensesBreakdown[event.category] || 0) + event.amount;
-          } else if (event.type === 'recurring-income') {
-            recurringIncomesVal += event.amount;
-          } else if (event.type === 'recurring-expense') {
-            recurringExpensesVal += event.amount;
+          if (event.type === 'one-time-income' || event.type === 'recurring-income') {
+            monthIncome += event.amount;
+          } else if (event.type === 'one-time-expense' || event.type === 'recurring-expense') {
+            monthExpenses += event.amount;
             monthExpensesBreakdown[event.category] = (monthExpensesBreakdown[event.category] || 0) + event.amount;
           }
         }
       });
 
-      monthIncome += oneTimeIncomesVal + recurringIncomesVal;
-      
-      // Calculate total expenses for this month
-      let totalExpenses = Object.values(monthExpensesBreakdown).reduce((sum, val) => sum + val, 0);
-
-      const netSavings = monthIncome - totalExpenses;
+      const netSavings = monthIncome - monthExpenses;
       const startingCash = runningCash;
       runningCash += netSavings;
 
@@ -920,7 +929,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         monthLabel: label,
         startingCash: Math.round(startingCash),
         income: Math.round(monthIncome),
-        expenses: Math.round(totalExpenses),
+        expenses: Math.round(monthExpenses),
         netSavings: Math.round(netSavings),
         endingCash: Math.round(runningCash),
         categoryBreakdown: monthExpensesBreakdown
