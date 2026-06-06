@@ -855,11 +855,14 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'Transfers to Savings',
     ]);
 
-    // Base monthly expense budget sum
+    // Base monthly expense projection — uses actual historical average as the primary source
+    // so the KPIs reflect what you genuinely spend, not just what you've budgeted.
+    // Falls back to the budget limit only for categories that have no historical data yet
+    // (e.g. a planned new recurring expense you haven't started yet).
     const baseBudgetExpensesMap: Record<string, number> = {};
     budgets.forEach(b => {
       if (!PROJECTION_EXPENSE_EXCLUSIONS.has(b.name)) {
-        baseBudgetExpensesMap[b.name] = b.limit || categoryAverages[b.name] || 0;
+        baseBudgetExpensesMap[b.name] = categoryAverages[b.name] || b.limit || 0;
       }
     });
 
