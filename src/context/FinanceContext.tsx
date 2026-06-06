@@ -185,6 +185,7 @@ const DEFAULT_RULES: CategorizationRule[] = [
   { id: '21', keyword: 'rent', category: 'Housing & Rent' },
   { id: '27', keyword: 'Mary Reid', category: 'Housing & Rent' },
   { id: '31', keyword: 'Eddie Reid', category: 'Housing & Rent' },
+  { id: '103', keyword: 'to Edward David', category: 'Housing & Rent' },
 
   // ── Specific Irish Payees ─────────────────────────────────────────────────
   { id: '24', keyword: 'Credit Union Dd', category: 'Loan Repayment' },
@@ -233,6 +234,21 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const parsedRules = JSON.parse(storedRules) as CategorizationRule[];
       const missingDefaults = DEFAULT_RULES.filter(dr => !parsedRules.some(pr => pr.keyword === dr.keyword));
       setRules([...parsedRules, ...missingDefaults]);
+
+      // Retroactively apply any newly merged default rules to already-stored transactions
+      if (missingDefaults.length > 0 && storedTx) {
+        const parsedTx = JSON.parse(storedTx) as Transaction[];
+        const updated = parsedTx.map(tx => {
+          const descLower = tx.description.toLowerCase();
+          for (const rule of missingDefaults) {
+            if (descLower.includes(rule.keyword.toLowerCase())) {
+              return { ...tx, category: rule.category };
+            }
+          }
+          return tx;
+        });
+        setTransactions(updated);
+      }
     }
 
     if (storedCash) setInitialCashState(Number(storedCash));
