@@ -23,7 +23,7 @@ interface FinanceContextType {
   isLoadingReport: boolean;
   
   // Actions
-  importTransactionsFromCSV: (csvText: string) => { success: boolean; count: number; error?: string };
+  importTransactionsFromCSV: (csvText: string) => { success: boolean; count: number; duplicatesDropped: number; totalKept: number; error?: string };
   addRule: (keyword: string, category: string) => void;
   deleteRule: (id: string) => void;
   updateBudget: (categoryName: string, limit: number) => void;
@@ -37,6 +37,8 @@ interface FinanceContextType {
   generateAdvisorReport: () => Promise<void>;
   clearAllData: () => void;
   loadDemoData: () => void;
+  updateTransactionCategory: (id: string, category: string) => void;
+  bulkRecategorise: (keyword: string, fromCategory: string, tiers: Array<{ upTo: number | null; category: string }>) => number;
   
   // Computed Projections & Stats
   categoryAverages: Record<string, number>;
@@ -78,6 +80,9 @@ const DEFAULT_RULES: CategorizationRule[] = [
   { id: '12', keyword: 'salary', category: 'Income' },
   { id: '13', keyword: 'payroll', category: 'Income' },
   { id: '14', keyword: 'deposit', category: 'Income' },
+  { id: '15b', keyword: 'wages', category: 'Income' },
+  { id: '16', keyword: 'zayo', category: 'Income' },
+  { id: '17b', keyword: 'hsbc bank plc', category: 'Income' },
 
   // ── Irish Grocery Stores ──────────────────────────────────────────────────
   { id: '7', keyword: 'tesco', category: 'Groceries' },
@@ -370,7 +375,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const lines = csvText.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
       if (lines.length < 2) {
-        return { success: false, count: 0, error: 'CSV file is empty or only contains one line.' };
+        return { success: false, count: 0, duplicatesDropped: 0, totalKept: 0, error: 'CSV file is empty or only contains one line.' };
       }
 
       // Simple CSV parser that handles commas inside quotes
@@ -481,12 +486,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (parsedTransactions.length === 0) {
-        return { success: false, count: 0, error: 'Could not extract valid transaction rows. Check your headers.' };
+        return { success: false, count: 0, duplicatesDropped: 0, totalKept: 0, error: 'Could not extract valid transaction rows. Check your headers.' };
       }
 
-      // Merge or overwrite? Let's sort and merge transactions based on ID/date, or just overwrite to set new statements.
-      // Usually, overwriting makes the experience much cleaner for statement uploads, or we can prepend/append.
-      // Let's replace the existing transaction log with this newly uploaded statement log, sorting by date descending.
+      // Sort incoming transactions newest-first for display consistency
       const sortedTransactions = [...parsedTransactions].sort((a, b) => b.date.localeCompare(a.date));
 
       // Heuristic: If the statement ONLY contains positive amounts, assume expenses were exported as positive numbers
@@ -500,13 +503,42 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         });
       }
 
-      setTransactions(sortedTransactions);
+      // ── Deduplication & cutover merge ────────────────────────────────────────
+      // Build a stable fingerprint from the three fields that survive re-exports.
+      // Slice description to 40 chars to tolerate minor truncation differences.
+      const fingerprint = (tx: Transaction): string =>
+        `${tx.date}|${tx.amount}|${tx.description.trim().toLowerCase().slice(0, 40)}`;
 
-      // Auto-recalculate initial cash if the transactions contain cash flow balance
-      // Or let the user adjust it. We'll keep our current initialCash, but suggest updating.
-      
+      // 1. Cutover date: earliest date present in the incoming statement.
+      //    All existing transactions from this date onwards are superseded.
+      const incomingDates = sortedTransactions.map(t => t.date).filter(Boolean).sort();
+      const cutoverDate = incomingDates[0] ?? '';
+
+      // 2. Keep existing transactions that pre-date the new statement entirely.
+      const existingBeforeCutover = transactions.filter(t => cutoverDate && t.date < cutoverDate);
+
+      // 3. Seed the fingerprint set with pre-cutover rows so we can also catch
+      //    any fringe overlap the cutover date alone doesn't eliminate.
+      const seenFingerprints = new Set<string>(existingBeforeCutover.map(fingerprint));
+
+      // 4. Filter incoming rows: skip any whose fingerprint was already seen.
+      const uniqueIncoming = sortedTransactions.filter(t => {
+        const fp = fingerprint(t);
+        if (seenFingerprints.has(fp)) return false;
+        seenFingerprints.add(fp); // guard against intra-batch duplicates too
+        return true;
+      });
+
+      const duplicatesDropped = sortedTransactions.length - uniqueIncoming.length;
+
+      // 5. Merge pre-cutover history with the de-duplicated incoming rows, newest first.
+      const merged = [...existingBeforeCutover, ...uniqueIncoming]
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+      setTransactions(merged);
+
       // Auto-update budget categories that exist in the transactions
-      const uniqueCats = Array.from(new Set(sortedTransactions.map(t => t.category)));
+      const uniqueCats = Array.from(new Set(uniqueIncoming.map(t => t.category)));
       setBudgets(prev => {
         const existingNames = prev.map(b => b.name);
         const newBudgets = [...prev];
@@ -518,9 +550,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return newBudgets;
       });
 
-      return { success: true, count: sortedTransactions.length };
+      return { success: true, count: uniqueIncoming.length, duplicatesDropped, totalKept: merged.length };
     } catch (e: any) {
-      return { success: false, count: 0, error: e.message || 'Unknown parsing error.' };
+      return { success: false, count: 0, duplicatesDropped: 0, totalKept: 0, error: e.message || 'Unknown parsing error.' };
     }
   };
 
@@ -545,6 +577,42 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const deleteRule = (id: string) => {
     setRules(prev => prev.filter(r => r.id !== id));
+  };
+
+  // Directly update a single transaction's category by ID (manual override)
+  const updateTransactionCategory = (id: string, category: string) => {
+    setTransactions(prev => prev.map(t => t.id === id ? { ...t, category } : t));
+  };
+
+  // Bulk reclassify transactions matching a keyword + source category using amount tiers.
+  // Tiers are evaluated in order; the first tier where |amount| <= upTo wins.
+  // The final tier (upTo: null) acts as the catch-all.
+  // Returns the number of transactions changed.
+  const bulkRecategorise = (
+    keyword: string,
+    fromCategory: string,
+    tiers: Array<{ upTo: number | null; category: string }>
+  ): number => {
+    let changed = 0;
+    setTransactions(prev => prev.map(tx => {
+      if (
+        tx.category === fromCategory &&
+        tx.description.toLowerCase().includes(keyword.toLowerCase())
+      ) {
+        const absAmt = Math.abs(tx.amount);
+        let newCat = tiers[tiers.length - 1].category; // default: last (catch-all) tier
+        for (const tier of tiers) {
+          if (tier.upTo !== null && absAmt <= tier.upTo) {
+            newCat = tier.category;
+            break;
+          }
+        }
+        changed++;
+        return { ...tx, category: newCat };
+      }
+      return tx;
+    }));
+    return changed;
   };
 
   // Update budget limit
@@ -802,6 +870,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (tx.category === 'Income' && tx.amount < 0) return; // Ignore negative items in Income
       if (tx.category === 'Spare Change Transfers') return; // Ignore automated savings transfers
       if (tx.category === 'Pocket Transfers') return; // Ignore pocket transfers — they cancel out
+      if (tx.category === 'Transfers to Savings') return; // Ignore savings transfers — money not spent
 
       const monthKey = tx.date.substring(0, 7); // "YYYY-MM"
       monthsSet.add(monthKey);
@@ -940,6 +1009,40 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [initialCash, budgets, futureEvents, categoryAverages]);
 
   // AI Chat & Insights handler
+  // Builds a month-by-month spending/income breakdown from raw transactions.
+  // Sent to the AI so it can answer period-specific questions.
+  const buildMonthlyBreakdown = () => {
+    const EXCLUDED = new Set(['Spare Change Transfers', 'Pocket Transfers', 'Transfers to Savings']);
+    const byMonth: Record<string, { income: number; spend: Record<string, number> }> = {};
+
+    transactions.forEach(tx => {
+      if (EXCLUDED.has(tx.category)) return;
+      const mk = tx.date.substring(0, 7); // "YYYY-MM"
+      if (!byMonth[mk]) byMonth[mk] = { income: 0, spend: {} };
+      if (tx.category === 'Income' && tx.amount > 0) {
+        byMonth[mk].income += tx.amount;
+      } else if (tx.category !== 'Income' && tx.amount < 0) {
+        const cat = tx.category || 'Uncategorized';
+        byMonth[mk].spend[cat] = (byMonth[mk].spend[cat] || 0) + Math.abs(tx.amount);
+      }
+    });
+
+    // Return sorted oldest → newest
+    return Object.fromEntries(
+      Object.entries(byMonth)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([mk, v]) => [
+          mk,
+          {
+            income: Math.round(v.income),
+            spend: Object.fromEntries(
+              Object.entries(v.spend).map(([c, a]) => [c, Math.round(a)])
+            )
+          }
+        ])
+    );
+  };
+
   const askAdvisorQuestion = async (text: string) => {
     if (!text.trim()) return;
 
@@ -976,6 +1079,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             currentBudget: budgets,
             futureEvents: futureEvents.filter(e => e.isActive),
             historicalAverages: categoryAverages,
+            monthlyBreakdown: buildMonthlyBreakdown(),
             projectionsSummary: monthlyProjections.map(p => ({
               month: p.monthLabel,
               cash: p.endingCash,
@@ -1030,6 +1134,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             currentBudget: budgets,
             futureEvents: futureEvents.filter(e => e.isActive),
             historicalAverages: categoryAverages,
+            monthlyBreakdown: buildMonthlyBreakdown(),
             projectionsSummary: monthlyProjections.map(p => ({
               month: p.monthLabel,
               cash: p.endingCash,
@@ -1118,6 +1223,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       generateAdvisorReport,
       clearAllData,
       loadDemoData,
+      updateTransactionCategory,
+      bulkRecategorise,
       categoryAverages,
       monthlyProjections,
       isDataLoaded

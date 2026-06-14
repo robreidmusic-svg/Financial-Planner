@@ -48,9 +48,12 @@ export const CSVImporter: React.FC = () => {
       const text = event.target?.result as string;
       const res = importTransactionsFromCSV(text);
       if (res.success) {
+        const dupeNote = res.duplicatesDropped > 0
+          ? ` ${res.duplicatesDropped} duplicate${res.duplicatesDropped > 1 ? 's' : ''} removed.`
+          : '';
         setImportResult({
           success: true,
-          message: `Successfully imported ${res.count} transactions from ${file.name}.`
+          message: `Imported ${res.count} new transaction${res.count !== 1 ? 's' : ''} from ${file.name}.${dupeNote} ${res.totalKept} total in your history.`
         });
       } else {
         setImportResult({

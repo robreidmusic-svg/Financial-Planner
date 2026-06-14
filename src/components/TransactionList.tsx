@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '../context/FinanceContext';
-import { Search, Filter, Plus, Trash2, ArrowUpDown, Tag, PlusCircle } from 'lucide-react';
+import { Search, Filter, Plus, Trash2, ArrowUpDown, Tag, Layers } from 'lucide-react';
 import { Transaction } from '../types';
 
 export const TransactionList: React.FC = () => {
@@ -11,7 +11,9 @@ export const TransactionList: React.FC = () => {
     deleteRule, 
     budgets,
     isDataLoaded,
-    addCategory
+    addCategory,
+    updateTransactionCategory,
+    bulkRecategorise
   } = useFinance();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,6 +22,8 @@ export const TransactionList: React.FC = () => {
   // Rule creator states
   const [newRuleKeyword, setNewRuleKeyword] = useState('');
   const [newRuleCategory, setNewRuleCategory] = useState('Groceries');
+  // Tracks a category we want to select as soon as budgets updates with it
+  const [pendingCategory, setPendingCategory] = useState<string | null>(null);
   
   // Custom Category creation states
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
@@ -29,6 +33,45 @@ export const TransactionList: React.FC = () => {
   // Sort states
   const [sortField, setSortField] = useState<'date' | 'amount'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  // Click-to-edit: tracks which transaction row is being re-categorised
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
+
+  // Bulk amount-based reclassification state (pre-filled for Applegreen fix)
+  const [bulkKeyword, setBulkKeyword] = useState('Applegreen');
+  const [bulkFromCategory, setBulkFromCategory] = useState('Subscriptions');
+  const [bulkTiers, setBulkTiers] = useState([
+    { upTo: '10', category: 'Coffee & Misc.' },
+    { upTo: '25', category: 'Groceries' },
+    { upTo: '',   category: 'Fuel' },         // empty upTo = catch-all
+  ]);
+  const [bulkResult, setBulkResult] = useState<number | null>(null);
+
+  const handleBulkApply = () => {
+    if (!bulkKeyword.trim()) return;
+    const tiers = bulkTiers
+      .filter(t => t.category.trim())
+      .map(t => ({
+        upTo: t.upTo.trim() ? parseFloat(t.upTo) : null,
+        category: t.category.trim(),
+      }));
+    if (tiers.length === 0) return;
+    const count = bulkRecategorise(bulkKeyword.trim(), bulkFromCategory, tiers);
+    setBulkResult(count);
+  };
+
+  const updateBulkTier = (i: number, field: 'upTo' | 'category', value: string) => {
+    setBulkTiers(prev => prev.map((t, idx) => idx === i ? { ...t, [field]: value } : t));
+    setBulkResult(null);
+  };
+
+  // Once a newly-created category lands in budgets, apply the pending selection
+  React.useEffect(() => {
+    if (pendingCategory && budgets.some(b => b.name === pendingCategory)) {
+      setNewRuleCategory(pendingCategory);
+      setPendingCategory(null);
+    }
+  }, [budgets, pendingCategory]);
 
   const categories = useMemo(() => {
     return ['All', ...budgets.map(b => b.name)];
@@ -68,21 +111,14 @@ export const TransactionList: React.FC = () => {
     if (!newRuleKeyword.trim()) return;
     addRule(newRuleKeyword.trim(), newRuleCategory);
     setNewRuleKeyword('');
+    // Reset to the first available budget category after submission
+    if (budgets.length > 0) {
+      setNewRuleCategory(budgets[0].name);
+    }
   };
 
   const handleCategoryChange = (txId: string, newCat: string) => {
-    // Manually override transaction category in local state (which will update context & localStorage)
-    // We can expose an action in Context or edit transactions list directly.
-    // In our context we have `transactions` state. Let's make sure we can update a single transaction category.
-    // Wait! Let's check what actions are exposed in FinanceContextType.
-    // We did not explicitly expose a `setTransactions` in the context, but let's check:
-    // Actually, in `FinanceContext` we can edit a transaction by adding a rule, but manual category changes are also useful.
-    // Let's add support for manual overrides or rule updates.
-    // Since we want manual categorization overrides, let's create a temporary rule or just update the transaction category.
-    // Wait, let's check how we can do it. If we add a rule for the specific description, it will auto-update all of them.
-    // Let's let the user just create a rule! That is extremely clean and matches "local-first rule engine".
-    // If they change category, we can add a rule for that exact description! Let's do that!
-    addRule(txId, newCat);
+    updateTransactionCategory(txId, newCat);
   };
 
   const formatCurrency = (val: number) => {
@@ -164,19 +200,50 @@ export const TransactionList: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-zinc-800/50 text-xs">
                 {filteredTransactions.map(tx => (
-                  <tr key={tx.id} className="hover:bg-zinc-900/40 transition-colors duration-150">
+                  <tr
+                    key={tx.id}
+                    className="hover:bg-zinc-900/40 transition-colors duration-150"
+                    onClick={() => setEditingTxId(tx.id)}
+                  >
                     <td className="py-3 px-4 text-zinc-400 font-mono whitespace-nowrap">{tx.date}</td>
                     <td className="py-3 px-4 text-zinc-200 font-medium max-w-[200px] truncate" title={tx.description}>
                       {tx.description}
                     </td>
-                    <td className="py-2 px-4">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                        tx.category === 'Income' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30' :
-                        tx.category === 'Uncategorized' ? 'bg-zinc-800 text-zinc-400' :
-                        'bg-zinc-900 text-zinc-300 border border-zinc-800'
-                      }`}>
-                        {tx.category}
-                      </span>
+                    <td className="py-1.5 px-4">
+                      {editingTxId === tx.id ? (
+                        // Active row: render the full select
+                        <select
+                          autoFocus
+                          value={tx.category}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            handleCategoryChange(tx.id, e.target.value);
+                            setEditingTxId(null);
+                          }}
+                          onBlur={() => setEditingTxId(null)}
+                          className="text-[10px] font-semibold rounded-full px-2.5 py-0.5 border appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/50 bg-zinc-800 text-zinc-200 border-amber-500/50"
+                        >
+                          {budgets.map(b => (
+                            <option key={b.name} value={b.name} className="bg-zinc-900 text-zinc-200">
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        // All other rows: lightweight static badge, click the row to activate
+                        <span
+                          title="Click row to change category"
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer ${
+                            tx.category === 'Income'
+                              ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30'
+                              : tx.category === 'Uncategorized'
+                              ? 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                              : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                          }`}
+                        >
+                          {tx.category}
+                        </span>
+                      )}
                     </td>
                     <td className={`py-3 px-4 text-right font-mono font-bold whitespace-nowrap ${
                       tx.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'
@@ -268,7 +335,10 @@ export const TransactionList: React.FC = () => {
                           return;
                         }
                         addCategory(name);
-                        setNewRuleCategory(name); // Auto-select the newly created category
+                        // Queue the selection — budgets won't have the new entry yet
+                        // (state update is async). The useEffect above will apply it
+                        // once the category appears in the budgets list.
+                        setPendingCategory(name);
                         setIsCreatingCategory(false);
                         setNewCategoryName('');
                       }}
@@ -330,6 +400,93 @@ export const TransactionList: React.FC = () => {
             ))}
             {rules.length === 0 && (
               <p className="text-[10px] text-zinc-500 font-mono text-center py-4">No rules created yet.</p>
+            )}
+          </div>
+        </div>
+        {/* Amount-Based Bulk Rules */}
+        <div className="glass-card p-6 rounded-2xl border border-zinc-800 space-y-4">
+          <h3 className="text-sm font-semibold tracking-wider uppercase text-zinc-300 flex items-center gap-1.5">
+            <Layers className="w-4 h-4 text-accent-gold" />
+            Amount-Based Rules
+          </h3>
+          <p className="text-xs text-zinc-400">
+            Reclassify a vendor's transactions by spend amount. Only affects the selected source category.
+          </p>
+
+          <div className="space-y-3">
+            {/* Vendor keyword */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-zinc-500">Vendor Keyword</label>
+              <input
+                type="text"
+                value={bulkKeyword}
+                onChange={e => { setBulkKeyword(e.target.value); setBulkResult(null); }}
+                placeholder="e.g. Applegreen"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold"
+              />
+            </div>
+
+            {/* Source category */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-zinc-500">Only From Category</label>
+              <select
+                value={bulkFromCategory}
+                onChange={e => { setBulkFromCategory(e.target.value); setBulkResult(null); }}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer"
+              >
+                {budgets.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+              </select>
+            </div>
+
+            {/* Tiers */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-zinc-500">Amount Tiers</label>
+              <div className="space-y-1.5">
+                {bulkTiers.map((tier, i) => (
+                  <div key={i} className="flex gap-1.5 items-center">
+                    <span className="text-[10px] text-zinc-500 w-5 text-right">{i + 1}.</span>
+                    {i < bulkTiers.length - 1 ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-zinc-500">≤ €</span>
+                        <input
+                          type="number"
+                          value={tier.upTo}
+                          onChange={e => updateBulkTier(i, 'upTo', e.target.value)}
+                          className="w-14 bg-zinc-900 border border-zinc-800 rounded-lg py-1.5 px-2 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold"
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-zinc-500 w-[68px] text-center">above →</span>
+                    )}
+                    <select
+                      value={tier.category}
+                      onChange={e => updateBulkTier(i, 'category', e.target.value)}
+                      className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg py-1.5 px-2 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer"
+                    >
+                      <option value="">-- pick --</option>
+                      {budgets.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleBulkApply}
+              className="w-full py-2 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/50 text-zinc-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all duration-300"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              Apply to Matching Transactions
+            </button>
+
+            {bulkResult !== null && (
+              <p className={`text-[10px] font-mono text-center ${
+                bulkResult > 0 ? 'text-emerald-400' : 'text-zinc-500'
+              }`}>
+                {bulkResult > 0
+                  ? `✓ ${bulkResult} transaction${bulkResult !== 1 ? 's' : ''} updated`
+                  : 'No matching transactions found in that category'}
+              </p>
             )}
           </div>
         </div>

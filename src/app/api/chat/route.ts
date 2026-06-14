@@ -35,6 +35,24 @@ export async function POST(request: Request) {
       .map((p: any, i: number) => `  Month ${i + 1} (${p.month}): Income: €${p.income}, Expenses: €${p.expenses}, Net: €${p.net}, Cash Remaining: €${p.cash}`)
       .join('\n');
 
+    // Format month-by-month breakdown — most recent 36 months to keep prompt size manageable
+    const breakdown: Record<string, { income: number; spend: Record<string, number> }> = financialContext.monthlyBreakdown || {};
+    const sortedMonths = Object.keys(breakdown).sort().slice(-36); // oldest → newest, max 36
+    const monthlyBreakdownText = sortedMonths.length > 0
+      ? sortedMonths.map(mk => {
+          const { income, spend } = breakdown[mk];
+          const spendParts = Object.entries(spend)
+            .sort(([, a], [, b]) => (b as number) - (a as number))
+            .map(([cat, amt]) => `${cat}: €${amt}`)
+            .join(' | ');
+          return `  ${mk}  Income: €${income}  |  ${spendParts}`;
+        }).join('\n')
+      : 'No monthly breakdown available.';
+
+    // Diagnostic log — visible in Cloud Run logs
+    console.log(`[AI] monthlyBreakdown months received: ${sortedMonths.length}`, sortedMonths.length > 0 ? `(${sortedMonths[0]} → ${sortedMonths[sortedMonths.length - 1]})` : '(empty)');
+
+
     const systemInstructions = `
 You are Rob's Financial Planner AI Coach & Analyst. 🧘‍♂️📊
 Your mission is to serve as an empathetic, encouraging financial coach, combined with a highly rigorous, data-driven professional financial analyst.
@@ -44,18 +62,22 @@ Persona Rules:
 - Hard Analytical Truths: Do NOT sugarcoat or ignore problems. If their budget is unsustainable, if they are burning cash, or if their runway is negative, tell them with directness and exact numerical calculations.
 - Be Actionable: Offer specific ideas to optimize spending, manage debt, and extend their financial runway.
 - Numbers First: Always ground your comments in the provided data. If they ask a hypothetical question, calculate the exact difference it would make in their 24-month ending balance.
+- Period Analysis: When asked about a specific period (e.g. "last 3 months", "Q1 2026", "last year"), use the Month-By-Month Breakdown table below to calculate precise averages or totals for that window. Do NOT fall back to all-time averages when period-specific data is available.
 
 Current User Financial Data:
 - Initial Starting Cash: €${financialContext.initialCash}
 - Categorized Monthly Budgets (Limits set by user):
 ${budgetsText}
-- Historical Actual Spending Averages (Calculated from statement imports):
+- Historical All-Time Spending Averages (use for general benchmarks):
 ${averagesText}
 - Future Scheduled Transactions/Adjusters:
 ${eventsText || 'None scheduled'}
+- Month-By-Month Actual Breakdown (use this for ALL period-specific questions — "last N months", specific quarters, trend analysis):
+${monthlyBreakdownText}
 - Projected 24-Month Ending Cash Trajectory (using current budgets + adjusters):
 ${trajectoryText}
 `;
+
 
     if (mode === 'report') {
       // Return a structured JSON report auditing the user's finances
