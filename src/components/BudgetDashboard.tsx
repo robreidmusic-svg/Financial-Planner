@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { KPIGrid } from './KPIGrid';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Info, CalendarDays, X } from 'lucide-react';
+import { Info, ChevronDown } from 'lucide-react';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -18,15 +18,23 @@ function formatDateLabel(iso: string): string {
   return `${parseInt(day, 10)} ${MONTH_NAMES[parseInt(month, 10) - 1]} ${year}`;
 }
 
-type FilterMode = 'average' | 'range';
+type PeriodKey = 'average' | 'this-month' | 'last-month' | 'last-3' | 'last-6' | 'last-12' | 'all-time';
+
+const PERIOD_OPTIONS: { value: PeriodKey; label: string }[] = [
+  { value: 'average',    label: 'Monthly Avg' },
+  { value: 'this-month', label: 'This Month' },
+  { value: 'last-month', label: 'Last Month' },
+  { value: 'last-3',     label: 'Last 3 Months' },
+  { value: 'last-6',     label: 'Last 6 Months' },
+  { value: 'last-12',    label: 'Last 12 Months' },
+  { value: 'all-time',   label: 'All Time' },
+];
 
 export const BudgetDashboard: React.FC = () => {
   const { categoryAverages, budgets, transactions, isDataLoaded } = useFinance();
   const [isMounted, setIsMounted] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [filterMode, setFilterMode] = useState<FilterMode>('average');
-  const [rangeStart, setRangeStart] = useState<string>('');
-  const [rangeEnd, setRangeEnd] = useState<string>('');
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>('average');
 
   useEffect(() => {
     setIsMounted(true);
@@ -40,7 +48,7 @@ export const BudgetDashboard: React.FC = () => {
     }).format(val);
   };
 
-  // Min / max transaction dates — used to pre-fill the date inputs
+  // Min / max transaction dates
   const [dataMinDate, dataMaxDate] = useMemo(() => {
     let min = '';
     let max = '';
@@ -52,20 +60,33 @@ export const BudgetDashboard: React.FC = () => {
     return [min, max];
   }, [transactions]);
 
-  // Pre-fill range inputs once data is available (only if still empty)
-  useEffect(() => {
-    if (dataMinDate && !rangeStart) setRangeStart(dataMinDate);
-    if (dataMaxDate && !rangeEnd) setRangeEnd(dataMaxDate);
-  }, [dataMinDate, dataMaxDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Compute effective date window from selected period key
+  const [effectiveStart, effectiveEnd] = useMemo(() => {
+    if (selectedPeriod === 'average') return ['', ''];
+    if (selectedPeriod === 'all-time') return [dataMinDate, dataMaxDate];
 
-  // Effective date window — ensures start <= end
-  const effectiveStart = rangeStart && rangeEnd && rangeStart > rangeEnd ? rangeEnd : rangeStart;
-  const effectiveEnd   = rangeStart && rangeEnd && rangeStart > rangeEnd ? rangeStart : rangeEnd;
+    const now = new Date();
+    const toISO = (d: Date) => d.toISOString().slice(0, 10);
+
+    if (selectedPeriod === 'this-month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return [toISO(start), toISO(end)];
+    }
+    if (selectedPeriod === 'last-month') {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end   = new Date(now.getFullYear(), now.getMonth(), 0);
+      return [toISO(start), toISO(end)];
+    }
+    const months = selectedPeriod === 'last-3' ? 3 : selectedPeriod === 'last-6' ? 6 : 12;
+    const start = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+    return [toISO(start), toISO(now)];
+  }, [selectedPeriod, dataMinDate, dataMaxDate]);
 
   // Pie data — average mode uses context averages; range mode sums matching transactions
   const pieData = useMemo(() => {
     let source: Record<string, number>;
-    if (filterMode === 'average') {
+    if (selectedPeriod === 'average') {
       source = categoryAverages;
     } else {
       // Sum transactions within the selected date window
@@ -85,7 +106,7 @@ export const BudgetDashboard: React.FC = () => {
       .filter(([name, value]) => name !== 'Income' && name !== 'Uncategorized' && name !== 'Transfers to Savings' && value > 0)
       .map(([name, value]) => ({ name, value: Math.round(value) }))
       .sort((a, b) => b.value - a.value);
-  }, [filterMode, effectiveStart, effectiveEnd, categoryAverages, transactions]);
+  }, [selectedPeriod, effectiveStart, effectiveEnd, categoryAverages, transactions]);
 
   const totalSpend = useMemo(() => pieData.reduce((sum, d) => sum + d.value, 0), [pieData]);
 
@@ -132,11 +153,12 @@ export const BudgetDashboard: React.FC = () => {
     '#facc15', '#4ade80',
   ];
 
-  const isAverage = filterMode === 'average';
+  const isAverage = selectedPeriod === 'average';
+  const periodLabel = PERIOD_OPTIONS.find(o => o.value === selectedPeriod)?.label ?? '';
   const rangeLabel = (effectiveStart && effectiveEnd)
     ? `${formatDateLabel(effectiveStart)} – ${formatDateLabel(effectiveEnd)}`
-    : 'Custom Range';
-  const centreLabel = isAverage ? 'Monthly Avg' : rangeLabel;
+    : periodLabel;
+  const centreLabel = isAverage ? 'Monthly Avg' : periodLabel;
   const amountColumnLabel = isAverage ? 'Avg / Month' : 'Total';
   const footerLabel = isAverage ? 'avg across all categories' : rangeLabel;
   const footerTitle = isAverage ? 'Total Monthly Outgoings' : 'Total Outgoings';
@@ -162,98 +184,37 @@ export const BudgetDashboard: React.FC = () => {
           {/* ── Spending Distribution — full-width panel ── */}
           <div className="glass-card p-6 rounded-2xl border border-zinc-800">
 
-            {/* Panel header + date range control bar */}
+            {/* Panel header + period selector */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
               <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 shrink-0">
                 Spending Distribution
               </h3>
 
-              {/* Date range control bar */}
-              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-
-                {/* Start date */}
-                <div className="relative flex items-center">
-                  <CalendarDays
-                    className="absolute left-2 w-3 h-3 pointer-events-none"
-                    style={{ color: '#71717a' }}
-                  />
-                  <input
-                    id="range-start"
-                    type="date"
-                    value={rangeStart}
-                    min={dataMinDate || undefined}
-                    max={dataMaxDate || undefined}
-                    onChange={e => { setRangeStart(e.target.value); setFilterMode('range'); setActiveIndex(null); }}
-                    className="date-input pl-7 pr-2 py-1 rounded-lg text-[11px] font-mono"
-                    style={{
-                      backgroundColor: filterMode === 'range' ? '#27272a' : '#1c1c1f',
-                      border: filterMode === 'range' ? '1px solid #52525b' : '1px solid #3f3f46',
-                      color: '#e4e4e7',
-                      outline: 'none',
-                      colorScheme: 'dark',
-                    }}
-                  />
-                </div>
-
-                {/* Arrow separator */}
-                <span style={{ color: '#52525b', fontSize: '11px', userSelect: 'none' }}>→</span>
-
-                {/* End date */}
-                <div className="relative flex items-center">
-                  <CalendarDays
-                    className="absolute left-2 w-3 h-3 pointer-events-none"
-                    style={{ color: '#71717a' }}
-                  />
-                  <input
-                    id="range-end"
-                    type="date"
-                    value={rangeEnd}
-                    min={dataMinDate || undefined}
-                    max={dataMaxDate || undefined}
-                    onChange={e => { setRangeEnd(e.target.value); setFilterMode('range'); setActiveIndex(null); }}
-                    className="date-input pl-7 pr-2 py-1 rounded-lg text-[11px] font-mono"
-                    style={{
-                      backgroundColor: filterMode === 'range' ? '#27272a' : '#1c1c1f',
-                      border: filterMode === 'range' ? '1px solid #52525b' : '1px solid #3f3f46',
-                      color: '#e4e4e7',
-                      outline: 'none',
-                      colorScheme: 'dark',
-                    }}
-                  />
-                </div>
-
-                {/* Avg button */}
-                <button
-                  id="filter-avg"
-                  onClick={() => { setFilterMode('average'); setActiveIndex(null); }}
-                  title="Show monthly average across all data"
-                  className="shrink-0 px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-150"
+              {/* Period dropdown */}
+              <div className="relative flex items-center shrink-0">
+                <select
+                  id="period-selector"
+                  value={selectedPeriod}
+                  onChange={e => { setSelectedPeriod(e.target.value as PeriodKey); setActiveIndex(null); }}
+                  className="appearance-none pl-3 pr-8 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-150 cursor-pointer"
                   style={{
-                    backgroundColor: isAverage ? '#f59e0b' : 'transparent',
-                    color: isAverage ? '#18181b' : '#71717a',
-                    border: isAverage ? '1px solid #f59e0b' : '1px solid #3f3f46',
+                    backgroundColor: '#1c1c1f',
+                    border: '1px solid #3f3f46',
+                    color: isAverage ? '#f59e0b' : '#e4e4e7',
+                    outline: 'none',
+                    colorScheme: 'dark',
                   }}
                 >
-                  Avg
-                </button>
-
-                {/* Reset button — only visible in range mode */}
-                {!isAverage && (
-                  <button
-                    id="filter-reset"
-                    onClick={() => {
-                      setRangeStart(dataMinDate);
-                      setRangeEnd(dataMaxDate);
-                      setFilterMode('range');
-                      setActiveIndex(null);
-                    }}
-                    title="Reset to full dataset range"
-                    className="shrink-0 p-1 rounded-lg transition-all duration-150"
-                    style={{ border: '1px solid #3f3f46', color: '#71717a' }}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
+                  {PERIOD_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  className="absolute right-2 w-3 h-3 pointer-events-none"
+                  style={{ color: '#71717a' }}
+                />
               </div>
             </div>
 
