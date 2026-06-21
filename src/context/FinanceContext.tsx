@@ -45,8 +45,10 @@ interface FinanceContextType {
   exportData: () => string;
   importData: (json: string) => { success: boolean; error?: string };
   resetRulesToDefaults: () => void;
+  setManualIncomeForecast: (monthIndex: number, amount: number | null) => void;
 
   // Computed Projections & Stats
+  manualIncomeForecasts: Record<number, number>;
   categoryAverages: Record<string, number>;
   monthlyProjections: MonthlyProjection[];
   isDataLoaded: boolean;
@@ -225,6 +227,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [activeReport, setActiveReport] = useState<AIAnalysisReport | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState<boolean>(false);
+  const [manualIncomeForecasts, setManualIncomeForecasts] = useState<Record<number, number>>({});
   const [isMounted, setIsMounted] = useState(false);
 
   // Initialize and load from local storage
@@ -238,6 +241,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const storedKey = localStorage.getItem('zw_gemini_key');
     const storedChat = localStorage.getItem('zw_chat');
     const storedReport = localStorage.getItem('zw_report');
+    const storedManualIncome = localStorage.getItem('zw_manual_income');
 
     if (storedTx) setTransactions(JSON.parse(storedTx));
     if (storedBudgets) setBudgets(JSON.parse(storedBudgets));
@@ -304,6 +308,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     if (storedReport) setActiveReport(JSON.parse(storedReport));
+    if (storedManualIncome) setManualIncomeForecasts(JSON.parse(storedManualIncome));
   }, []);
 
   // Save changes to localStorage when state changes
@@ -351,6 +356,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [activeReport, isMounted]);
 
+  useEffect(() => {
+    if (!isMounted) return;
+    localStorage.setItem('zw_manual_income', JSON.stringify(manualIncomeForecasts));
+  }, [manualIncomeForecasts, isMounted]);
+
   const isDataLoaded = useMemo(() => transactions.length > 0, [transactions]);
 
   // Set initial cash
@@ -361,6 +371,18 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Set API Key
   const setGeminiApiKey = (key: string) => {
     setGeminiApiKeyState(key);
+  };
+
+  const setManualIncomeForecast = (monthIndex: number, amount: number | null) => {
+    setManualIncomeForecasts(prev => {
+      const updated = { ...prev };
+      if (amount === null) {
+        delete updated[monthIndex];
+      } else {
+        updated[monthIndex] = amount;
+      }
+      return updated;
+    });
   };
 
   // Category assignment helper using keyword rules
@@ -740,6 +762,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     ]);
     setActiveReport(null);
+    setManualIncomeForecasts({});
     localStorage.removeItem('zw_transactions');
     localStorage.removeItem('zw_budgets');
     localStorage.removeItem('zw_events');
@@ -747,6 +770,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.removeItem('zw_initial_cash');
     localStorage.removeItem('zw_chat');
     localStorage.removeItem('zw_report');
+    localStorage.removeItem('zw_manual_income');
   };
 
   // Load Demo Data
@@ -1036,7 +1060,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const label = `${monthNames[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
 
       // Start from the raw transaction averages
-      let monthIncome = baseIncome;
+      let monthIncome = manualIncomeForecasts[offset] !== undefined ? manualIncomeForecasts[offset] : baseIncome;
       let monthExpenses = baseExpenses;
 
       // Copy category breakdown for future events layer
@@ -1077,7 +1101,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     return projections;
-  }, [initialCash, budgets, futureEvents, transactions]);
+  }, [initialCash, budgets, futureEvents, transactions, manualIncomeForecasts]);
 
   // AI Chat & Insights handler
   // Builds a month-by-month spending/income breakdown from raw transactions.
@@ -1302,6 +1326,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       exportData,
       importData,
       resetRulesToDefaults,
+      setManualIncomeForecast,
+      manualIncomeForecasts,
       categoryAverages,
       monthlyProjections,
       isDataLoaded

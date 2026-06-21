@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { Download, FileSpreadsheet } from 'lucide-react';
 
 export const FinancialLedger: React.FC = () => {
-  const { monthlyProjections, budgets } = useFinance();
+  const { monthlyProjections, budgets, manualIncomeForecasts, setManualIncomeForecast } = useFinance();
+  const [editingIncomeMonth, setEditingIncomeMonth] = useState<number | null>(null);
+  const [editIncomeValue, setEditIncomeValue] = useState<string>('');
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IE', {
@@ -116,13 +118,68 @@ export const FinancialLedger: React.FC = () => {
               {/* Income */}
               <tr className="bg-emerald-950/5 hover:bg-emerald-950/10 transition-colors font-semibold">
                 <td className="py-3 px-4 text-emerald-400 sticky left-0 bg-zinc-900/90 md:bg-zinc-950/90 border-r border-zinc-850">
-                  Projected Income (+)
+                  <div className="flex flex-col">
+                    <span>Projected Income (+)</span>
+                    <span className="text-[9px] font-normal text-emerald-500/70 font-sans">Click any month to override</span>
+                  </div>
                 </td>
-                {monthlyProjections.map(p => (
-                  <td key={p.monthIndex} className="py-3 px-6 text-right text-emerald-400 border-r border-zinc-850/20">
-                    {formatCurrency(p.income)}
-                  </td>
-                ))}
+                {monthlyProjections.map(p => {
+                  const isOverridden = manualIncomeForecasts[p.monthIndex] !== undefined;
+                  const isEditing = editingIncomeMonth === p.monthIndex;
+                  return (
+                    <td 
+                      key={p.monthIndex} 
+                      className={`py-3 px-6 text-right border-r border-zinc-850/20 group relative cursor-pointer ${isOverridden ? 'text-accent-gold' : 'text-emerald-400'}`}
+                      onClick={() => {
+                        if (!isEditing) {
+                          setEditingIncomeMonth(p.monthIndex);
+                          setEditIncomeValue(String(p.income));
+                        }
+                      }}
+                    >
+                      {isEditing ? (
+                        <form 
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const val = parseFloat(editIncomeValue);
+                            if (!isNaN(val)) {
+                              setManualIncomeForecast(p.monthIndex, val);
+                            }
+                            setEditingIncomeMonth(null);
+                          }}
+                          className="flex items-center justify-end gap-1"
+                        >
+                          <input
+                            type="number"
+                            value={editIncomeValue}
+                            onChange={(e) => setEditIncomeValue(e.target.value)}
+                            onBlur={() => setEditingIncomeMonth(null)}
+                            autoFocus
+                            className="w-20 bg-zinc-950 border border-zinc-700 rounded px-1 py-0.5 text-right text-xs font-mono text-zinc-100 focus:outline-none focus:border-accent-gold"
+                          />
+                        </form>
+                      ) : (
+                        <div className="flex items-center justify-end gap-2">
+                          {isOverridden && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setManualIncomeForecast(p.monthIndex, null);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-rose-950/40 text-rose-400 rounded transition-opacity"
+                              title="Clear manual override"
+                            >
+                              <span className="text-[10px]">✕</span>
+                            </button>
+                          )}
+                          <span className={isOverridden ? 'font-bold underline decoration-accent-gold/40 underline-offset-4' : ''}>
+                            {formatCurrency(p.income)}
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
 
               {/* Expense Category rows */}
