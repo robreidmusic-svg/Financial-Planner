@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useFinance } from '../context/FinanceContext';
-import { ShieldCheck, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Sparkles, TrendingUp, Pencil, Trash2, Check, X } from 'lucide-react';
 
 export const BudgetEditor: React.FC = () => {
-  const { budgets, categoryAverages, updateBudget, isDataLoaded } = useFinance();
+  const { budgets, categoryAverages, updateBudget, isDataLoaded, deleteCategory, renameCategory } = useFinance();
+  
+  // Inline rename states
+  const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
+  const [editNewName, setEditNewName] = useState('');
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IE', {
       style: 'currency',
       currency: 'EUR',
       maximumFractionDigits: 0
@@ -22,23 +26,23 @@ export const BudgetEditor: React.FC = () => {
   const expenseCategories = budgets.filter(b => b.name !== 'Income' && b.name !== 'Uncategorized');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-left font-sans">
       {/* Top Banner Context */}
       <div className="glass-card p-6 rounded-2xl border border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold tracking-wider uppercase text-zinc-300">Set Monthly Budget Baseline</h3>
           <p className="text-xs text-zinc-400">
-            Establish baseline limits for your spending. These targets form the base structure of your 24-month forecast.
+            Establish baseline limits for your spending. These targets form the base structure of your projection forecast.
           </p>
         </div>
         {!isDataLoaded && (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-950/40 border border-amber-900/30 text-amber-400 rounded-full text-xs font-semibold">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-955/40 border border-amber-900/30 text-amber-400 rounded-full text-xs font-semibold">
             <ShieldAlert className="w-3.5 h-3.5" />
             No statements loaded: Using default guidelines
           </span>
         )}
         {isDataLoaded && (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-950/40 border border-emerald-900/30 text-emerald-400 rounded-full text-xs font-semibold">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-955/40 border border-emerald-900/30 text-emerald-400 rounded-full text-xs font-semibold">
             <ShieldCheck className="w-3.5 h-3.5" />
             Comparing against statements
           </span>
@@ -59,7 +63,7 @@ export const BudgetEditor: React.FC = () => {
                 <div className="flex justify-between items-end">
                   <span className="text-sm font-semibold text-zinc-200">{incomeCategory.name}</span>
                   <div className="text-right">
-                    <span className="text-xs text-zinc-500 block">Baseline Target</span>
+                    <span className="text-xs text-zinc-550 block">Baseline Target</span>
                     <span className="text-lg font-bold font-mono text-emerald-400">
                       {formatCurrency(incomeCategory.limit)}
                     </span>
@@ -76,7 +80,7 @@ export const BudgetEditor: React.FC = () => {
                     onChange={(e) => handleSliderChange('Income', Number(e.target.value))}
                     className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 focus:outline-none"
                   />
-                  <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
+                  <div className="flex justify-between text-[10px] text-zinc-550 font-mono">
                     <span>€0</span>
                     <span>€15,000</span>
                   </div>
@@ -111,16 +115,78 @@ export const BudgetEditor: React.FC = () => {
                 
                 return (
                   <div key={cat.name} className="space-y-2 pb-4 border-b border-zinc-800/40 last:border-b-0 last:pb-0">
-                    <div className="flex justify-between items-center">
-                      <div className="space-y-0.5">
-                        <span className="text-sm font-semibold text-zinc-200">{cat.name}</span>
+                    <div className="flex justify-between items-center gap-4">
+                      <div className="space-y-0.5 text-left flex-1 min-w-0">
+                        {editingCategoryName === cat.name ? (
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              if (editNewName.trim() && editNewName.trim() !== cat.name) {
+                                renameCategory(cat.name, editNewName.trim());
+                              }
+                              setEditingCategoryName(null);
+                            }}
+                            className="flex items-center gap-1.5"
+                          >
+                            <input
+                              type="text"
+                              value={editNewName}
+                              onChange={(e) => setEditNewName(e.target.value)}
+                              className="bg-zinc-900 border border-zinc-800 rounded-lg py-1 px-2 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold"
+                              autoFocus
+                              required
+                            />
+                            <button
+                              type="submit"
+                              className="p-1 text-emerald-450 hover:text-emerald-400 hover:bg-zinc-800 rounded-md transition-colors"
+                              title="Save Category Name"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingCategoryName(null)}
+                              className="p-1 text-zinc-450 hover:text-zinc-300 hover:bg-zinc-800 rounded-md transition-colors"
+                              title="Cancel Edit"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </form>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-zinc-200 truncate max-w-[150px] sm:max-w-xs">{cat.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingCategoryName(cat.name);
+                                setEditNewName(cat.name);
+                              }}
+                              className="p-1 text-zinc-550 hover:text-zinc-300 rounded-md transition-colors"
+                              title="Rename Category"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete the "${cat.name}" category? Any transactions in this category will be reset to "Uncategorized", and triggers for this category will be deleted.`)) {
+                                  deleteCategory(cat.name);
+                                }
+                              }}
+                              className="p-1 text-zinc-550 hover:text-rose-450 rounded-md transition-colors"
+                              title="Delete Category"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                         {isDataLoaded && (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-[10px] text-zinc-500 font-mono">
-                              Avg Spent: {formatCurrency(actualAvg)}
+                              Avg Spent: {formatCurrency(actualAvg)}/mo
                             </span>
                             {isOverBudget && (
-                              <span className="text-[9px] px-1.5 bg-rose-950/50 border border-rose-900/30 text-rose-400 rounded-md font-semibold font-mono animate-pulse">
+                              <span className="text-[9px] px-1.5 bg-rose-955/50 border border-rose-900/30 text-rose-400 rounded-md font-semibold font-mono animate-pulse">
                                 Overspent by {formatCurrency(actualAvg - cat.limit)}
                               </span>
                             )}
@@ -128,8 +194,8 @@ export const BudgetEditor: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="text-right">
-                        <span className="text-xs text-zinc-500 block">Budget Limit</span>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-zinc-550 block">Budget Limit</span>
                         <input
                           type="number"
                           value={cat.limit}
@@ -149,11 +215,11 @@ export const BudgetEditor: React.FC = () => {
                         onChange={(e) => handleSliderChange(cat.name, Number(e.target.value))}
                         className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none ${
                           isOverBudget 
-                            ? 'bg-rose-950 accent-rose-400' 
+                            ? 'bg-rose-955 accent-rose-400' 
                             : 'bg-zinc-800 accent-accent-gold'
                         }`}
                       />
-                      <div className="flex justify-between text-[9px] text-zinc-500 font-mono">
+                      <div className="flex justify-between text-[9px] text-zinc-550 font-mono">
                         <span>€0</span>
                         <span>€4,000</span>
                       </div>

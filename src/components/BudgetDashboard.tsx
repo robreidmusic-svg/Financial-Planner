@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { KPIGrid } from './KPIGrid';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Info, ChevronDown } from 'lucide-react';
+import { Info, ChevronDown, AlertTriangle } from 'lucide-react';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -163,6 +163,20 @@ export const BudgetDashboard: React.FC = () => {
   const footerLabel = isAverage ? 'avg across all categories' : rangeLabel;
   const footerTitle = isAverage ? 'Total Monthly Outgoings' : 'Total Outgoings';
 
+  // Uncategorized transaction count
+  const uncategorizedCount = useMemo(() =>
+    transactions.filter(tx => tx.category === 'Uncategorized').length
+  , [transactions]);
+
+  // Over-budget categories (where historical average exceeds budget limit)
+  const overBudgetCategories = useMemo(() =>
+    budgets
+      .filter(b => b.name !== 'Income' && b.name !== 'Uncategorized' && b.limit > 0)
+      .map(b => ({ name: b.name, avg: categoryAverages[b.name] || 0, limit: b.limit }))
+      .filter(b => b.avg > b.limit)
+      .sort((a, b) => (b.avg - b.limit) - (a.avg - a.limit))
+  , [budgets, categoryAverages]);
+
   if (!isMounted) {
     return (
       <div className="space-y-6">
@@ -178,6 +192,30 @@ export const BudgetDashboard: React.FC = () => {
       {/* KPI strip */}
       <KPIGrid />
 
+      {/* Uncategorized warning */}
+      {isDataLoaded && uncategorizedCount > 0 && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-amber-950/20 border border-amber-900/30 rounded-xl text-xs text-amber-300">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-400" />
+          <span>
+            <strong>{uncategorizedCount} transaction{uncategorizedCount !== 1 ? 's' : ''}</strong> {uncategorizedCount !== 1 ? 'are' : 'is'} <strong>Uncategorized</strong> — your spending averages and forecasts may be understated. Review them in the Transactions tab.
+          </span>
+        </div>
+      )}
+
+      {/* Over-budget alert strip */}
+      {isDataLoaded && overBudgetCategories.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {overBudgetCategories.map(cat => (
+            <span
+              key={cat.name}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-rose-950/30 border border-rose-900/30 text-rose-400"
+            >
+              <AlertTriangle className="w-3 h-3" />
+              {cat.name}: +{formatCurrency(cat.avg - cat.limit)}/mo over budget
+            </span>
+          ))}
+        </div>
+      )}
       {isDataLoaded ? (
         <div className="space-y-6">
 

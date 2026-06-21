@@ -39,7 +39,13 @@ interface FinanceContextType {
   loadDemoData: () => void;
   updateTransactionCategory: (id: string, category: string) => void;
   bulkRecategorise: (keyword: string, fromCategory: string, tiers: Array<{ upTo: number | null; category: string }>) => number;
-  
+  deleteCategory: (categoryName: string) => void;
+  renameCategory: (oldName: string, newName: string) => void;
+  updateFutureEvent: (id: string, update: Partial<Omit<FutureEvent, 'id'>>) => void;
+  exportData: () => string;
+  importData: (json: string) => { success: boolean; error?: string };
+  resetRulesToDefaults: () => void;
+
   // Computed Projections & Stats
   categoryAverages: Record<string, number>;
   monthlyProjections: MonthlyProjection[];
@@ -282,8 +288,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
-    if (storedEvents) setFutureEvents(JSON.parse(storedEvents));
-    if (storedCash) setInitialCashState(Number(storedCash));
     if (storedKey) setGeminiApiKeyState(storedKey);
     
     if (storedChat) {
@@ -650,6 +654,67 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setFutureEvents(prev => prev.map(e => e.id === id ? { ...e, isActive: !e.isActive } : e));
   };
 
+  // Patch a future event (used by inline editor)
+  const updateFutureEvent = (id: string, update: Partial<Omit<FutureEvent, 'id'>>) => {
+    setFutureEvents(prev => prev.map(e => e.id === id ? { ...e, ...update } : e));
+  };
+
+  // Delete a budget category — reassigns its transactions to Uncategorized
+  const deleteCategory = (categoryName: string) => {
+    if (categoryName === 'Income' || categoryName === 'Uncategorized') return;
+    setBudgets(prev => prev.filter(b => b.name !== categoryName));
+    setRules(prev => prev.filter(r => r.category !== categoryName));
+    setTransactions(prev => prev.map(tx =>
+      tx.category === categoryName ? { ...tx, category: 'Uncategorized' } : tx
+    ));
+  };
+
+  // Rename a category across budgets, rules, and transactions
+  const renameCategory = (oldName: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+    if (budgets.some(b => b.name.toLowerCase() === trimmed.toLowerCase())) return;
+    setBudgets(prev => prev.map(b => b.name === oldName ? { ...b, name: trimmed } : b));
+    setRules(prev => prev.map(r => r.category === oldName ? { ...r, category: trimmed } : r));
+    setTransactions(prev => prev.map(tx => tx.category === oldName ? { ...tx, category: trimmed } : tx));
+  };
+
+  // Reset categorization rules to factory defaults (no data wipe)
+  const resetRulesToDefaults = () => {
+    setRules(DEFAULT_RULES);
+  };
+
+  // Export all data as a portable JSON snapshot
+  const exportData = (): string => {
+    return JSON.stringify({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      transactions,
+      budgets,
+      futureEvents,
+      rules,
+      initialCash,
+    }, null, 2);
+  };
+
+  // Restore state from a JSON snapshot produced by exportData
+  const importData = (json: string): { success: boolean; error?: string } => {
+    try {
+      const data = JSON.parse(json);
+      if (!Array.isArray(data.transactions) || !Array.isArray(data.budgets)) {
+        return { success: false, error: 'Invalid backup file — missing required fields.' };
+      }
+      setTransactions(data.transactions);
+      setBudgets(data.budgets);
+      if (Array.isArray(data.futureEvents)) setFutureEvents(data.futureEvents);
+      if (Array.isArray(data.rules)) setRules(data.rules);
+      if (typeof data.initialCash === 'number') setInitialCashState(data.initialCash);
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Failed to parse backup file. Ensure it is a valid JSON export.' };
+    }
+  };
+
   // Clear data
   const clearAllData = () => {
     setTransactions([]);
@@ -959,8 +1024,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       );
     });
 
-    // Run 24 month projections
-    for (let offset = 0; offset < 24; offset++) {
+    // Run 36 month projections
+    for (let offset = 0; offset < 36; offset++) {
       const currentMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + offset, 1);
       const label = `${monthNames[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
 
@@ -1006,7 +1071,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     return projections;
-  }, [initialCash, budgets, futureEvents, categoryAverages]);
+  }, [initialCash, budgets, futureEvents, transactions]);
 
   // AI Chat & Insights handler
   // Builds a month-by-month spending/income breakdown from raw transactions.
@@ -1225,6 +1290,12 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       loadDemoData,
       updateTransactionCategory,
       bulkRecategorise,
+      deleteCategory,
+      renameCategory,
+      updateFutureEvent,
+      exportData,
+      importData,
+      resetRulesToDefaults,
       categoryAverages,
       monthlyProjections,
       isDataLoaded

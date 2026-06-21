@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, Cell } from 'recharts';
-import { Plus, Trash2, Calendar, AlertCircle, TrendingUp, TrendingDown, ToggleLeft, ToggleRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Calendar, AlertCircle, TrendingUp, TrendingDown, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Pencil, Check, X } from 'lucide-react';
 import { FutureEvent } from '../types';
 
 export const Forecaster: React.FC = () => {
@@ -13,11 +13,21 @@ export const Forecaster: React.FC = () => {
     toggleFutureEvent,
     budgets,
     categoryAverages,
+    updateFutureEvent,
   } = useFinance();
 
   const [isMounted, setIsMounted] = useState(false);
   const [chartType, setChartType] = useState<'cash' | 'flows'>('cash');
   const [showBasis, setShowBasis] = useState(false);
+  const [horizon, setHorizon] = useState<12 | 24 | 36>(24);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+
+  // Edit states for inline form
+  const [editLabel, setEditLabel] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editMonthOffset, setEditMonthOffset] = useState('1');
+  const [editEventType, setEditEventType] = useState<FutureEvent['type']>('one-time-expense');
+  const [editCategory, setEditCategory] = useState('');
   
   // Future Event Form State
   const [label, setLabel] = useState('');
@@ -31,7 +41,7 @@ export const Forecaster: React.FC = () => {
   }, []);
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IE', {
       style: 'currency',
       currency: 'EUR',
       maximumFractionDigits: 0
@@ -61,10 +71,14 @@ export const Forecaster: React.FC = () => {
     return `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
   };
 
+  const filteredProjections = useMemo(() => {
+    return monthlyProjections.slice(0, horizon);
+  }, [monthlyProjections, horizon]);
+
   if (!isMounted) {
     return (
       <div className="h-[350px] bg-zinc-900/30 rounded-2xl border border-zinc-800 flex items-center justify-center">
-        <p className="text-zinc-500 font-mono text-xs">Loading projection engine...</p>
+        <p className="text-zinc-550 font-mono text-xs">Loading projection engine...</p>
       </div>
     );
   }
@@ -73,32 +87,52 @@ export const Forecaster: React.FC = () => {
     <div className="space-y-6">
       {/* Visual Chart Panel */}
       <div className="glass-card p-6 rounded-2xl border border-zinc-800 space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-800/40 pb-4">
-          <div className="space-y-0.5">
-            <h3 className="text-sm font-semibold tracking-wider uppercase text-zinc-300">24-Month Forecast Projection</h3>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-zinc-800/40 pb-4">
+          <div className="space-y-0.5 text-left font-sans">
+            <h3 className="text-sm font-semibold tracking-wider uppercase text-zinc-300">{horizon}-Month Forecast Projection</h3>
             <p className="text-xs text-zinc-400">
               Interactive timeline showing future balances incorporating budgets, adjusters, and events.
             </p>
           </div>
           
-          {/* Chart Toggle */}
-          <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs font-mono font-semibold">
-            <button
-              onClick={() => setChartType('cash')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                chartType === 'cash' ? 'bg-zinc-850 text-accent-gold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              Cash Balance
-            </button>
-            <button
-              onClick={() => setChartType('flows')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                chartType === 'flows' ? 'bg-zinc-850 text-accent-gold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              Cash Flow
-            </button>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Horizon Toggle */}
+            <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-[11px] font-mono font-semibold">
+              {([12, 24, 36] as const).map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => setHorizon(h)}
+                  className={`px-3 py-1 rounded-lg transition-all ${
+                    horizon === h ? 'bg-zinc-850 text-accent-gold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {h}M
+                </button>
+              ))}
+            </div>
+
+            {/* Chart Toggle */}
+            <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-[11px] font-mono font-semibold">
+              <button
+                type="button"
+                onClick={() => setChartType('cash')}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  chartType === 'cash' ? 'bg-zinc-850 text-accent-gold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Cash Balance
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartType('flows')}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  chartType === 'flows' ? 'bg-zinc-850 text-accent-gold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Cash Flow
+              </button>
+            </div>
           </div>
         </div>
 
@@ -106,7 +140,7 @@ export const Forecaster: React.FC = () => {
         <div className="h-[320px] w-full pt-4">
           <ResponsiveContainer width="100%" height="100%">
             {chartType === 'cash' ? (
-              <AreaChart data={monthlyProjections} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+              <AreaChart data={filteredProjections} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorCash" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="var(--color-accent-gold)" stopOpacity={0.25}/>
@@ -144,7 +178,7 @@ export const Forecaster: React.FC = () => {
                 />
               </AreaChart>
             ) : (
-              <BarChart data={monthlyProjections} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+              <BarChart data={filteredProjections} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                 <XAxis 
                   dataKey="monthLabel" 
@@ -171,7 +205,7 @@ export const Forecaster: React.FC = () => {
                   radius={[4, 4, 0, 0]}
                   opacity={0.8}
                 >
-                  {monthlyProjections.map((entry, index) => (
+                  {filteredProjections.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
                       fill={entry.netSavings >= 0 ? 'var(--color-accent-sage)' : 'var(--color-accent-rose)'} 
@@ -186,7 +220,7 @@ export const Forecaster: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Event Form Creator */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 text-left font-sans">
           <div className="glass-card p-6 rounded-2xl border border-zinc-800 space-y-4">
             <h3 className="text-sm font-semibold tracking-wider uppercase text-zinc-300 flex items-center gap-1.5">
               <Calendar className="w-4 h-4 text-accent-gold" />
@@ -204,7 +238,7 @@ export const Forecaster: React.FC = () => {
                   placeholder="e.g. Europe Trip, Tax Refund"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold font-sans"
                   required
                 />
               </div>
@@ -227,9 +261,9 @@ export const Forecaster: React.FC = () => {
                   <select
                     value={monthOffset}
                     onChange={(e) => setMonthOffset(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer font-sans"
                   >
-                    {Array.from({ length: 24 }).map((_, i) => (
+                    {Array.from({ length: horizon }).map((_, i) => (
                       <option key={i} value={i + 1}>
                         Month {i + 1} ({currentMonthLabel(i)})
                       </option>
@@ -243,7 +277,7 @@ export const Forecaster: React.FC = () => {
                 <select
                   value={eventType}
                   onChange={(e) => setEventType(e.target.value as FutureEvent['type'])}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer font-sans"
                 >
                   <option value="one-time-expense">One-Time Expense</option>
                   <option value="one-time-income">One-Time Income</option>
@@ -257,7 +291,7 @@ export const Forecaster: React.FC = () => {
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer font-sans"
                 >
                   {budgets.map(b => (
                     <option key={b.name} value={b.name}>{b.name}</option>
@@ -267,7 +301,7 @@ export const Forecaster: React.FC = () => {
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/50 text-zinc-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all duration-300"
+                className="w-full py-2.5 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/50 text-zinc-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all duration-300 font-sans"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Inject Adjuster
@@ -277,7 +311,7 @@ export const Forecaster: React.FC = () => {
         </div>
 
         {/* Future Events Manager List */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4 font-sans text-left">
           <div className="glass-card p-6 rounded-2xl border border-zinc-800 space-y-4 h-full min-h-[350px]">
             <h3 className="text-sm font-semibold tracking-wider uppercase text-zinc-300">
               Active Adjusters ({futureEvents.length})
@@ -286,6 +320,107 @@ export const Forecaster: React.FC = () => {
             <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
               {futureEvents.map(event => {
                 const isExpense = event.type.includes('expense');
+                const isEditing = editingEventId === event.id;
+
+                if (isEditing) {
+                  return (
+                    <form
+                      key={event.id}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        updateFutureEvent(event.id, {
+                          label: editLabel.trim(),
+                          amount: Math.abs(parseFloat(editAmount)),
+                          monthOffset: parseInt(editMonthOffset) - 1,
+                          type: editEventType,
+                          category: editCategory
+                        });
+                        setEditingEventId(null);
+                      }}
+                      className="p-3.5 rounded-xl border border-zinc-700 bg-zinc-900/60 space-y-3 text-left animate-fadeIn"
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="space-y-1 text-left">
+                          <label className="text-[9px] uppercase font-bold text-zinc-500">Label</label>
+                          <input
+                            type="text"
+                            value={editLabel}
+                            onChange={(e) => setEditLabel(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-1 px-2 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold font-sans"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1 text-left">
+                          <label className="text-[9px] uppercase font-bold text-zinc-500">Amount (€)</label>
+                          <input
+                            type="number"
+                            value={editAmount}
+                            onChange={(e) => setEditAmount(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-1 px-2 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold font-mono"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-left">
+                        <div className="space-y-1">
+                          <label className="text-[9px] uppercase font-bold text-zinc-500">Timeline</label>
+                          <select
+                            value={editMonthOffset}
+                            onChange={(e) => setEditMonthOffset(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-1 px-2 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer font-sans"
+                          >
+                            {Array.from({ length: 36 }).map((_, i) => (
+                              <option key={i} value={i + 1}>
+                                Mo. {i + 1} ({currentMonthLabel(i)})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] uppercase font-bold text-zinc-500">Type</label>
+                          <select
+                            value={editEventType}
+                            onChange={(e) => setEditEventType(e.target.value as FutureEvent['type'])}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-1 px-2 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer font-sans"
+                          >
+                            <option value="one-time-expense">One-Time Expense</option>
+                            <option value="one-time-income">One-Time Income</option>
+                            <option value="recurring-expense">Recurring Expense</option>
+                            <option value="recurring-income">Recurring Income</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] uppercase font-bold text-zinc-500">Category Map</label>
+                          <select
+                            value={editCategory}
+                            onChange={(e) => setEditCategory(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-1 px-2 text-zinc-200 text-xs focus:outline-none focus:border-accent-gold appearance-none cursor-pointer font-sans"
+                          >
+                            {budgets.map(b => (
+                              <option key={b.name} value={b.name}>{b.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2 border-t border-zinc-850">
+                        <button
+                          type="button"
+                          onClick={() => setEditingEventId(null)}
+                          className="p-1.5 px-2.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition-colors font-sans"
+                        >
+                          <X className="w-3 h-3" /> Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="p-1.5 px-2.5 bg-zinc-850 hover:bg-zinc-800 text-accent-gold border border-zinc-700/50 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition-colors font-sans"
+                        >
+                          <Check className="w-3 h-3" /> Save
+                        </button>
+                      </div>
+                    </form>
+                  );
+                }
+
                 return (
                   <div 
                     key={event.id}
@@ -309,7 +444,7 @@ export const Forecaster: React.FC = () => {
                         )}
                       </button>
                       
-                      <div className="space-y-0.5">
+                      <div className="space-y-0.5 text-left font-sans">
                         <span className="text-xs font-bold text-zinc-200">{event.label}</span>
                         <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono font-medium">
                           <span className="capitalize">{event.type.replace('-', ' ')}</span>
@@ -321,11 +456,27 @@ export const Forecaster: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <span className={`text-sm font-bold font-mono ${isExpense ? 'text-rose-400' : 'text-emerald-400'}`}>
                         {isExpense ? '-' : '+'}{formatCurrency(event.amount)}
                       </span>
                       <button
+                        type="button"
+                        onClick={() => {
+                          setEditingEventId(event.id);
+                          setEditLabel(event.label);
+                          setEditAmount(String(event.amount));
+                          setEditMonthOffset(String(event.monthOffset + 1));
+                          setEditEventType(event.type);
+                          setEditCategory(event.category);
+                        }}
+                        className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition-colors"
+                        title="Edit adjuster"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => deleteFutureEvent(event.id)}
                         className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-950/20 rounded-lg transition-colors duration-250"
                         title="Delete adjuster"
@@ -336,21 +487,21 @@ export const Forecaster: React.FC = () => {
                   </div>
                 );
               })}
-              
-              {futureEvents.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-500 space-y-2 border border-dashed border-zinc-800/80 rounded-xl">
-                  <AlertCircle className="w-6 h-6 text-zinc-600" />
-                  <p className="text-xs font-mono">No adjusters loaded in model.</p>
-                  <p className="text-[10px] text-zinc-600">Add an event on the left to start sandbox modeling.</p>
-                </div>
-              )}
             </div>
+            
+            {futureEvents.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-500 space-y-2 border border-dashed border-zinc-800/80 rounded-xl">
+                <AlertCircle className="w-6 h-6 text-zinc-600" />
+                <p className="text-xs font-mono">No adjusters loaded in model.</p>
+                <p className="text-[10px] text-zinc-600 font-sans">Add an event on the left to start sandbox modeling.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* ── Projection Basis breakdown ── */}
-      <div className="glass-card rounded-2xl border border-zinc-800 overflow-hidden">
+      <div className="glass-card rounded-2xl border border-zinc-800 overflow-hidden text-left font-sans">
         <button
           id="projection-basis-toggle"
           onClick={() => setShowBasis(v => !v)}
@@ -374,13 +525,13 @@ export const Forecaster: React.FC = () => {
           return (
             <div className="px-6 pb-6 space-y-3">
               {/* Income row */}
-              <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-emerald-950/20 border border-emerald-900/30">
+              <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-emerald-950/20 border border-emerald-900/30 text-left font-sans">
                 <span className="text-xs font-semibold text-emerald-400">Monthly Income (projected)</span>
                 <span className="font-mono font-bold text-emerald-400 text-sm">+{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(m0.income)}</span>
               </div>
 
               {/* Column headers */}
-              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-zinc-600 px-3 pt-1">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-zinc-600 px-3 pt-1 text-left font-sans">
                 <span>Expense Category</span>
                 <span>Monthly (projected)</span>
               </div>
@@ -391,14 +542,14 @@ export const Forecaster: React.FC = () => {
                   const pct = totalExpenses > 0 ? (item.value / totalExpenses) * 100 : 0;
                   const isLarge = pct > 20;
                   return (
-                    <div key={item.name} className="flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-zinc-900/40 transition-colors">
+                    <div key={item.name} className="flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-zinc-900/40 transition-colors text-left font-sans">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div
                           className="h-1 rounded-full shrink-0"
                           style={{ width: `${Math.max(pct, 2)}%`, maxWidth: '80px', backgroundColor: isLarge ? '#f43f5e' : '#52525b' }}
                         />
                         <span className={`text-xs truncate ${isLarge ? 'text-rose-300 font-semibold' : 'text-zinc-400'}`}>{item.name}</span>
-                        {isLarge && <span className="text-[9px] font-bold text-rose-500 bg-rose-950/40 px-1.5 py-0.5 rounded-full shrink-0">HIGH</span>}
+                        {isLarge && <span className="text-[9px] font-bold text-rose-500 bg-rose-950/40 px-1.5 py-0.5 rounded-full shrink-0 font-sans">HIGH</span>}
                       </div>
                       <span className={`font-mono text-xs font-semibold ml-4 shrink-0 ${isLarge ? 'text-rose-400' : 'text-zinc-300'}`}>
                         -{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(item.value)}
@@ -409,13 +560,13 @@ export const Forecaster: React.FC = () => {
               </div>
 
               {/* Total footer */}
-              <div className="flex items-center justify-between pt-3 border-t border-zinc-800 px-3">
+              <div className="flex items-center justify-between pt-3 border-t border-zinc-800 px-3 text-left font-sans">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Total Monthly Expenses</span>
                 <span className="font-mono font-bold text-rose-400">
                   -{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(totalExpenses)}
                 </span>
               </div>
-              <div className="flex items-center justify-between px-3">
+              <div className="flex items-center justify-between px-3 text-left font-sans">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Net</span>
                 <span className={`font-mono font-bold text-sm ${m0.netSavings >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {m0.netSavings >= 0 ? '+' : ''}{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(m0.netSavings)}

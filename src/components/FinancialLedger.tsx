@@ -6,7 +6,7 @@ export const FinancialLedger: React.FC = () => {
   const { monthlyProjections, budgets } = useFinance();
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IE', {
       style: 'currency',
       currency: 'EUR',
       maximumFractionDigits: 0

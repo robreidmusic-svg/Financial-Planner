@@ -122,10 +122,10 @@ export const TransactionList: React.FC = () => {
   };
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IE', {
       style: 'currency',
       currency: 'EUR',
-      maximumFractionDigits: 2
+      maximumFractionDigits: 0
     }).format(val);
   };
 
