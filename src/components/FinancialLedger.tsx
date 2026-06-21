@@ -153,7 +153,13 @@ export const FinancialLedger: React.FC = () => {
                             type="number"
                             value={editIncomeValue}
                             onChange={(e) => setEditIncomeValue(e.target.value)}
-                            onBlur={() => setEditingIncomeMonth(null)}
+                            onBlur={() => {
+                              const val = parseFloat(editIncomeValue);
+                              if (!isNaN(val)) {
+                                setManualIncomeForecast(p.monthIndex, val);
+                              }
+                              setEditingIncomeMonth(null);
+                            }}
                             autoFocus
                             className="w-20 bg-zinc-950 border border-zinc-700 rounded px-1 py-0.5 text-right text-xs font-mono text-zinc-100 focus:outline-none focus:border-accent-gold"
                           />
