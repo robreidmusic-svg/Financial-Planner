@@ -694,6 +694,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       futureEvents,
       rules,
       initialCash,
+      geminiApiKey,
+      chatHistory,
+      activeReport,
     }, null, 2);
   };
 
@@ -709,6 +712,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (Array.isArray(data.futureEvents)) setFutureEvents(data.futureEvents);
       if (Array.isArray(data.rules)) setRules(data.rules);
       if (typeof data.initialCash === 'number') setInitialCashState(data.initialCash);
+      if (typeof data.geminiApiKey === 'string') setGeminiApiKeyState(data.geminiApiKey);
+      if (Array.isArray(data.chatHistory)) setChatHistory(data.chatHistory);
+      if (data.activeReport) setActiveReport(data.activeReport);
       return { success: true };
     } catch {
       return { success: false, error: 'Failed to parse backup file. Ensure it is a valid JSON export.' };
