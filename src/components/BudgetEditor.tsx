@@ -1,13 +1,27 @@
 import React, { useState } from 'react';
 import { useFinance } from '../context/FinanceContext';
-import { ShieldCheck, ShieldAlert, Sparkles, TrendingUp, Pencil, Trash2, Check, X } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Sparkles, TrendingUp, Pencil, Trash2, Check, X, PiggyBank } from 'lucide-react';
 
 export const BudgetEditor: React.FC = () => {
-  const { budgets, categoryAverages, updateBudget, isDataLoaded, deleteCategory, renameCategory } = useFinance();
+  const { budgets, categoryAverages, updateBudget, isDataLoaded, deleteCategory, renameCategory, savingsGoals } = useFinance();
   
   // Inline rename states
   const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
   const [editNewName, setEditNewName] = useState('');
+
+  const totalSavingsCommitment = React.useMemo(() => {
+    const currentMonth = new Date();
+    const projMonthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+    let total = 0;
+    savingsGoals.forEach(g => {
+      if (g.targetDate <= projMonthKey) return;
+      const [tYear, tMonth] = g.targetDate.split('-').map(Number);
+      const targetDateObj = new Date(tYear, tMonth - 1, 1);
+      const monthsLeft = Math.max(1, (targetDateObj.getFullYear() - currentMonth.getFullYear()) * 12 + (targetDateObj.getMonth() - currentMonth.getMonth()));
+      total += Math.round(g.targetAmount / monthsLeft);
+    });
+    return total;
+  }, [savingsGoals]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IE', {
@@ -107,6 +121,19 @@ export const BudgetEditor: React.FC = () => {
             <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
               Monthly Expense Limits
             </h4>
+
+            {savingsGoals.length > 0 && (
+              <div className="bg-accent-gold/10 border border-accent-gold/20 p-4 rounded-xl flex items-start gap-3">
+                <PiggyBank className="w-5 h-5 text-accent-gold shrink-0 mt-0.5" />
+                <div>
+                  <h5 className="text-xs font-bold text-accent-gold uppercase tracking-wider">Savings Commitment</h5>
+                  <p className="text-xs text-zinc-300 mt-1">
+                    Your active savings goals require a total commitment of <strong>€{totalSavingsCommitment}/mo</strong>.
+                    Ensure your <span className="font-mono text-zinc-400">Transfers to Savings</span> budget limit matches or exceeds this to maintain your forecast accuracy.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-6">
               {expenseCategories.map(cat => {

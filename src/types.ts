@@ -54,3 +54,12 @@ export interface AIAnalysisReport {
   runwayRiskAlerts: string;
   actionableSteps: string[];
 }
+
+export interface SavingsGoal {
+  id: string;
+  name: string;           // e.g. "Holiday Fund"
+  targetAmount: number;   // e.g. 5000
+  targetDate: string;     // "YYYY-MM" (month granularity)
+  linkedCategory: string; // Category to track actuals from, e.g. "Transfers to Savings"
+  color: string;          // Hex colour for this goal's chart/card
+}

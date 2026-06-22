@@ -10,16 +10,18 @@ import { BudgetEditor } from '../components/BudgetEditor';
 import { FinancialLedger } from '../components/FinancialLedger';
 import { AIAdvisorPanel } from '../components/AIAdvisorPanel';
 import { SettingsPanel } from '../components/SettingsPanel';
-import { LayoutDashboard, FileSpreadsheet, LineChart, Sliders, BrainCircuit, TableProperties, Settings, Wallet } from 'lucide-react';
+import { SavingsPlanner } from '../components/SavingsPlanner';
+import { LayoutDashboard, FileSpreadsheet, LineChart, Sliders, BrainCircuit, TableProperties, Settings, Wallet, PiggyBank } from 'lucide-react';
 
 function DashboardContent() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'forecast' | 'budget' | 'advisor' | 'ledger' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'forecast' | 'budget' | 'savings' | 'advisor' | 'ledger' | 'settings'>('dashboard');
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'transactions', label: 'Transactions', icon: FileSpreadsheet },
     { id: 'forecast', label: '24-Month Forecast', icon: LineChart },
     { id: 'budget', label: 'Budget Setup', icon: Sliders },
+    { id: 'savings', label: 'Savings Planner', icon: PiggyBank },
     { id: 'advisor', label: 'AI Advisor', icon: BrainCircuit },
     { id: 'ledger', label: 'Ledger Sheet', icon: TableProperties },
     { id: 'settings', label: 'Settings', icon: Settings },
@@ -90,6 +92,7 @@ function DashboardContent() {
             )}
             {activeTab === 'forecast' && <Forecaster />}
             {activeTab === 'budget' && <BudgetEditor />}
+            {activeTab === 'savings' && <SavingsPlanner />}
             {activeTab === 'advisor' && <AIAdvisorPanel />}
             {activeTab === 'ledger' && <FinancialLedger />}
             {activeTab === 'settings' && <SettingsPanel />}

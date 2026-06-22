@@ -352,7 +352,7 @@ export const BudgetDashboard: React.FC = () => {
                           />
                           <span
                             className="text-xs leading-tight transition-colors duration-150"
-                            style={{ color: isActive ? '#f4f4f5' : '#d4d4d8' }}
+                            style={{ color: isActive ? '#1c1917' : '#57534e' }}
                           >
                             {item.name}
                           </span>
@@ -373,7 +373,7 @@ export const BudgetDashboard: React.FC = () => {
                                 }}
                               />
                             </div>
-                            <span className="text-[10px] font-mono text-zinc-400 w-8 text-right">
+                            <span className="text-[10px] font-mono text-zinc-500 w-8 text-right">
                               {pct.toFixed(1)}%
                             </span>
                           </div>
@@ -381,7 +381,7 @@ export const BudgetDashboard: React.FC = () => {
                           {/* Amount */}
                           <span
                             className="font-mono font-semibold text-xs w-20 text-right"
-                            style={{ color: isActive ? color : '#e4e4e7' }}
+                            style={{ color: isActive ? color : '#57534e' }}
                           >
                             {formatCurrency(item.value)}
                           </span>

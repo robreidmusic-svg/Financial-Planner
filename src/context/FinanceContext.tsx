@@ -8,7 +8,8 @@ import {
   CategorizationRule, 
   MonthlyProjection, 
   ChatMessage,
-  AIAnalysisReport 
+  AIAnalysisReport,
+  SavingsGoal
 } from '../types';
 
 interface FinanceContextType {
@@ -46,8 +47,12 @@ interface FinanceContextType {
   importData: (json: string) => { success: boolean; error?: string };
   resetRulesToDefaults: () => void;
   setManualIncomeForecast: (monthIndex: number, amount: number | null) => void;
+  addSavingsGoal: (goal: Omit<SavingsGoal, 'id'>) => void;
+  updateSavingsGoal: (id: string, update: Partial<Omit<SavingsGoal, 'id'>>) => void;
+  deleteSavingsGoal: (id: string) => void;
 
   // Computed Projections & Stats
+  savingsGoals: SavingsGoal[];
   manualIncomeForecasts: Record<number, number>;
   categoryAverages: Record<string, number>;
   monthlyProjections: MonthlyProjection[];
@@ -228,6 +233,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeReport, setActiveReport] = useState<AIAnalysisReport | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState<boolean>(false);
   const [manualIncomeForecasts, setManualIncomeForecasts] = useState<Record<number, number>>({});
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
   const [isMounted, setIsMounted] = useState(false);
 
   // Initialize and load from local storage
@@ -242,6 +248,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const storedChat = localStorage.getItem('zw_chat');
     const storedReport = localStorage.getItem('zw_report');
     const storedManualIncome = localStorage.getItem('zw_manual_income');
+    const storedSavingsGoals = localStorage.getItem('zw_savings_goals');
 
     if (storedTx) setTransactions(JSON.parse(storedTx));
     if (storedBudgets) setBudgets(JSON.parse(storedBudgets));
@@ -309,6 +316,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (storedReport) setActiveReport(JSON.parse(storedReport));
     if (storedManualIncome) setManualIncomeForecasts(JSON.parse(storedManualIncome));
+    if (storedSavingsGoals) setSavingsGoals(JSON.parse(storedSavingsGoals));
   }, []);
 
   // Save changes to localStorage when state changes
@@ -361,6 +369,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem('zw_manual_income', JSON.stringify(manualIncomeForecasts));
   }, [manualIncomeForecasts, isMounted]);
 
+  useEffect(() => {
+    if (!isMounted) return;
+    localStorage.setItem('zw_savings_goals', JSON.stringify(savingsGoals));
+  }, [savingsGoals, isMounted]);
+
   const isDataLoaded = useMemo(() => transactions.length > 0, [transactions]);
 
   // Set initial cash
@@ -383,6 +396,25 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return updated;
     });
+  };
+
+  const GOAL_COLORS = ['#d97706', '#059669', '#6d28d9', '#be123c', '#0369a1', '#b45309', '#047857', '#7c3aed'];
+
+  const addSavingsGoal = (goal: Omit<SavingsGoal, 'id'>) => {
+    const newGoal: SavingsGoal = {
+      ...goal,
+      id: `sg-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      color: goal.color || GOAL_COLORS[savingsGoals.length % GOAL_COLORS.length],
+    };
+    setSavingsGoals(prev => [...prev, newGoal]);
+  };
+
+  const updateSavingsGoal = (id: string, update: Partial<Omit<SavingsGoal, 'id'>>) => {
+    setSavingsGoals(prev => prev.map(g => g.id === id ? { ...g, ...update } : g));
+  };
+
+  const deleteSavingsGoal = (id: string) => {
+    setSavingsGoals(prev => prev.filter(g => g.id !== id));
   };
 
   // Category assignment helper using keyword rules
@@ -1084,6 +1116,23 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       });
 
+      // Deduct savings goal contributions for future months
+      // For each goal whose target date is still in the future, compute the
+      // required monthly contribution and subtract it from the projection.
+      const projMonthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+      savingsGoals.forEach(goal => {
+        if (goal.targetDate <= projMonthKey) return; // goal already past/at target month
+        const [tYear, tMonth] = goal.targetDate.split('-').map(Number);
+        const targetDateObj = new Date(tYear, tMonth - 1, 1);
+        const monthsLeft = Math.max(1,
+          (targetDateObj.getFullYear() - currentMonth.getFullYear()) * 12 +
+          (targetDateObj.getMonth() - currentMonth.getMonth())
+        );
+        const monthlyContrib = Math.round(goal.targetAmount / monthsLeft);
+        monthExpenses += monthlyContrib;
+        monthExpensesBreakdown['Savings Goals'] = (monthExpensesBreakdown['Savings Goals'] || 0) + monthlyContrib;
+      });
+
       const netSavings = monthIncome - monthExpenses;
       const startingCash = runningCash;
       runningCash += netSavings;
@@ -1101,7 +1150,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     return projections;
-  }, [initialCash, budgets, futureEvents, transactions, manualIncomeForecasts]);
+  }, [initialCash, budgets, futureEvents, transactions, manualIncomeForecasts, savingsGoals]);
 
   // AI Chat & Insights handler
   // Builds a month-by-month spending/income breakdown from raw transactions.
@@ -1327,6 +1376,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       importData,
       resetRulesToDefaults,
       setManualIncomeForecast,
+      addSavingsGoal,
+      updateSavingsGoal,
+      deleteSavingsGoal,
+      savingsGoals,
       manualIncomeForecasts,
       categoryAverages,
       monthlyProjections,
