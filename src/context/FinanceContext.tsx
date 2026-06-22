@@ -1193,7 +1193,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           return {
             id: `chat-a-${Date.now()}`,
             role: 'assistant',
-            content: data.reply || "Sorry, I had trouble parsing the forecast model. Let's try adjusting the variables.",
+            content: data.error ? `Error: ${data.error}` : (data.reply || "Sorry, I had trouble parsing the forecast model. Let's try adjusting the variables."),
             timestamp: Date.now()
           };
         }
